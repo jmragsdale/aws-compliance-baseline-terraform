@@ -1,0 +1,34 @@
+# Trivy misconfiguration findings accepted with a reason.
+#
+# Same rule as .checkov.yaml: an unexplained ignore is how a compliance repo
+# quietly stops being one. Every entry names why the finding does not apply and
+# where the equivalent control actually lives.
+
+# S3 bucket does not have logging enabled.
+# The access-log bucket IS the logging target. Pointing its own access logging
+# at itself creates an unbounded recursion of log deliveries, and the replica
+# would need a second access-log bucket in the DR region for records nobody
+# reads. Auditor reads of the primary archive are logged (control LOG-007).
+AVD-AWS-0089
+
+# S3 bucket does not have versioning enabled.
+# Reported against buckets whose versioning is a separate
+# aws_s3_bucket_versioning resource, which Trivy does not always associate with
+# the bucket. See controls LOG-005 and the aws_s3_bucket_versioning resources in
+# terraform/modules/logging and terraform/modules/evidence.
+AVD-AWS-0090
+
+# IAM policy document uses a wildcard action.
+# Triggered by the VPC endpoint policy in terraform/modules/network/endpoints.tf.
+# An endpoint policy is intersected with the caller's IAM policy and the resource
+# policy -- it can only narrow access, never grant it -- and an endpoint policy
+# without a broad Allow blocks every call through the endpoint. The perimeter is
+# the aws:ResourceOrgID Deny in the same document (control NET-007).
+AVD-AWS-0057
+
+# KMS key policy allows wildcard resource.
+# A KMS key policy is only ever evaluated for the key it is attached to, so
+# Resource "*" is the documented AWS idiom for "this key". Naming the key's own
+# ARN is circular. Scope comes from the principal and aws:SourceArn /
+# aws:SourceAccount / aws:PrincipalOrgID conditions (control ENC-004).
+AVD-AWS-0132

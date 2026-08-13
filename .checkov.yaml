@@ -1,0 +1,12 @@
+directory:
+  - .
+framework:
+  - terraform
+quiet: true
+compact: true
+download-external-modules: false
+skip-path:
+  - examples/.*/\.terraform
+# Findings accepted with a written reason. Anything added here must justify
+# itself -- an unexplained skip is how a compliance repo quietly stops being one.
+skip-check: []

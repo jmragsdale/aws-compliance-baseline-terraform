@@ -1,0 +1,267 @@
+##############################################################################
+# Operational best practices for FedRAMP Moderate (trimmed).
+#
+# A hand-maintained subset of the AWS-published FedRAMP conformance pack. Each
+# rule here maps to a control this repo also implements preventively, so a
+# finding means a guardrail was bypassed rather than never existed.
+#
+# This is NOT the full published pack. See CONTROLS.md DET-006.
+##############################################################################
+Resources:
+  # AU-2, AU-12: audit records exist and cover every region.
+  CloudTrailEnabled:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: fedramp-cloudtrail-enabled
+      Description: AU-2 - a trail must be recording API activity.
+      Source:
+        Owner: AWS
+        SourceIdentifier: CLOUD_TRAIL_ENABLED
+
+  MultiRegionCloudTrailEnabled:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: fedramp-multi-region-cloudtrail-enabled
+      Description: AU-2 - regional-only trails leave unmonitored regions.
+      Source:
+        Owner: AWS
+        SourceIdentifier: MULTI_REGION_CLOUD_TRAIL_ENABLED
+
+  # AU-9: audit records protected from modification.
+  CloudTrailLogFileValidationEnabled:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: fedramp-cloudtrail-log-file-validation-enabled
+      Description: AU-9(3) - digest files prove log integrity.
+      Source:
+        Owner: AWS
+        SourceIdentifier: CLOUD_TRAIL_LOG_FILE_VALIDATION_ENABLED
+
+  CloudTrailEncryptionEnabled:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: fedramp-cloudtrail-encryption-enabled
+      Description: SC-28 - trail log files encrypted with KMS.
+      Source:
+        Owner: AWS
+        SourceIdentifier: CLOUD_TRAIL_ENCRYPTION_ENABLED
+
+  # SC-28: data at rest.
+  EncryptedVolumes:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: fedramp-encrypted-volumes
+      Description: SC-28 - every attached EBS volume is encrypted.
+      Source:
+        Owner: AWS
+        SourceIdentifier: ENCRYPTED_VOLUMES
+
+  EbsEncryptionByDefault:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: fedramp-ec2-ebs-encryption-by-default
+      Description: SC-28 - account-level EBS encryption default is on.
+      Source:
+        Owner: AWS
+        SourceIdentifier: EC2_EBS_ENCRYPTION_BY_DEFAULT
+
+  RdsStorageEncrypted:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: fedramp-rds-storage-encrypted
+      Description: SC-28 - RDS storage encrypted at rest.
+      Source:
+        Owner: AWS
+        SourceIdentifier: RDS_STORAGE_ENCRYPTED
+
+  S3BucketServerSideEncryptionEnabled:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: fedramp-s3-bucket-server-side-encryption-enabled
+      Description: SC-28 - default encryption configured on every bucket.
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED
+
+  # SC-8: data in transit.
+  S3BucketSslRequestsOnly:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: fedramp-s3-bucket-ssl-requests-only
+      Description: SC-8 - bucket policy denies plaintext transport.
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_SSL_REQUESTS_ONLY
+
+  # AC-3, AC-6: access enforcement and least privilege.
+  S3BucketPublicReadProhibited:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: fedramp-s3-bucket-public-read-prohibited
+      Description: AC-3 - no bucket readable by the public.
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_PUBLIC_READ_PROHIBITED
+
+  S3BucketPublicWriteProhibited:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: fedramp-s3-bucket-public-write-prohibited
+      Description: AC-3 - no bucket writable by the public.
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_PUBLIC_WRITE_PROHIBITED
+
+  IamPolicyNoStatementsWithAdminAccess:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: fedramp-iam-policy-no-statements-with-admin-access
+      Description: AC-6 - no customer-managed policy grants Action:* on Resource:*.
+      Source:
+        Owner: AWS
+        SourceIdentifier: IAM_POLICY_NO_STATEMENTS_WITH_ADMIN_ACCESS
+
+  IamRootAccessKeyCheck:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: fedramp-iam-root-access-key-check
+      Description: AC-6(9) - the root user must have no access keys.
+      Source:
+        Owner: AWS
+        SourceIdentifier: IAM_ROOT_ACCESS_KEY_CHECK
+
+  # IA-2: identification and authentication.
+  RootAccountMfaEnabled:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: fedramp-root-account-mfa-enabled
+      Description: IA-2(1) - hardware or virtual MFA on the root user.
+      Source:
+        Owner: AWS
+        SourceIdentifier: ROOT_ACCOUNT_MFA_ENABLED
+
+  MfaEnabledForIamConsoleAccess:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: fedramp-mfa-enabled-for-iam-console-access
+      Description: IA-2(1) - every console-enabled IAM user has MFA.
+      Source:
+        Owner: AWS
+        SourceIdentifier: MFA_ENABLED_FOR_IAM_CONSOLE_ACCESS
+
+  # IA-5: authenticator management.
+  IamPasswordPolicy:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: fedramp-iam-password-policy
+      Description: IA-5(1) - password composition meets the Moderate baseline.
+      Source:
+        Owner: AWS
+        SourceIdentifier: IAM_PASSWORD_POLICY
+      InputParameters:
+        RequireUppercaseCharacters: "true"
+        RequireLowercaseCharacters: "true"
+        RequireSymbols: "true"
+        RequireNumbers: "true"
+        MinimumPasswordLength: "14"
+        PasswordReusePrevention: "24"
+        MaxPasswordAge: "90"
+
+  AccessKeysRotated:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: fedramp-access-keys-rotated
+      Description: IA-5(1) - access keys older than 90 days.
+      Source:
+        Owner: AWS
+        SourceIdentifier: ACCESS_KEYS_ROTATED
+      InputParameters:
+        maxAccessKeyAge: "90"
+
+  IamUserUnusedCredentialsCheck:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: fedramp-iam-user-unused-credentials-check
+      Description: AC-2(3) - credentials unused for 90 days must be disabled.
+      Source:
+        Owner: AWS
+        SourceIdentifier: IAM_USER_UNUSED_CREDENTIALS_CHECK
+      InputParameters:
+        maxCredentialUsageAge: "90"
+
+  # SC-7: boundary protection.
+  VpcDefaultSecurityGroupClosed:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: fedramp-vpc-default-security-group-closed
+      Description: SC-7 - the default security group carries no rules.
+      Source:
+        Owner: AWS
+        SourceIdentifier: VPC_DEFAULT_SECURITY_GROUP_CLOSED
+
+  RestrictedIncomingTraffic:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: fedramp-restricted-incoming-traffic
+      Description: SC-7 - no security group exposes administrative ports broadly.
+      Source:
+        Owner: AWS
+        SourceIdentifier: RESTRICTED_INCOMING_TRAFFIC
+
+  Ec2InstanceNoPublicIp:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: fedramp-ec2-instance-no-public-ip
+      Description: SC-7 - workload instances are not directly addressable.
+      Source:
+        Owner: AWS
+        SourceIdentifier: EC2_INSTANCE_NO_PUBLIC_IP
+
+  # AU-2: network audit records.
+  VpcFlowLogsEnabled:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: fedramp-vpc-flow-logs-enabled
+      Description: AU-2 - flow logs enabled on every VPC.
+      Source:
+        Owner: AWS
+        SourceIdentifier: VPC_FLOW_LOGS_ENABLED
+
+  # CM-6, AC-6: instance metadata hardening.
+  Ec2Imdsv2Check:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: fedramp-ec2-imdsv2-check
+      Description: CM-6 - instances require IMDSv2 session tokens.
+      Source:
+        Owner: AWS
+        SourceIdentifier: EC2_IMDSV2_CHECK
+
+  # SC-12: key management.
+  CmkBackingKeyRotationEnabled:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: fedramp-cmk-backing-key-rotation-enabled
+      Description: SC-12(1) - automatic rotation on every customer-managed key.
+      Source:
+        Owner: AWS
+        SourceIdentifier: CMK_BACKING_KEY_ROTATION_ENABLED
+
+  # SI-4: monitoring services present.
+  GuardDutyEnabledCentralized:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: fedramp-guardduty-enabled-centralized
+      Description: SI-4 - GuardDuty enabled and centrally administered.
+      Source:
+        Owner: AWS
+        SourceIdentifier: GUARDDUTY_ENABLED_CENTRALIZED
+
+  SecurityHubEnabled:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: fedramp-securityhub-enabled
+      Description: CA-7 - Security Hub enabled in the account.
+      Source:
+        Owner: AWS
+        SourceIdentifier: SECURITYHUB_ENABLED

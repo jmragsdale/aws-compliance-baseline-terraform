@@ -1,0 +1,128 @@
+name: compliance-ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+env:
+  TF_VERSION: "1.13.3"
+
+jobs:
+  # -------------------------------------------------------------------------
+  # Terraform correctness. No cloud credentials are used anywhere in this
+  # pipeline -- everything runs against `-backend=false` inits, so the repo is
+  # plan-verified, never apply-verified. See README "What is and is not verified".
+  # -------------------------------------------------------------------------
+  terraform:
+    name: fmt / validate / lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform fmt
+        run: terraform fmt -check -recursive -diff
+
+      - name: terraform validate (root and every example)
+        run: |
+          set -euo pipefail
+          fail=0
+          for dir in terraform examples/*/; do
+            [ -f "$dir/main.tf" ] || continue
+            echo "::group::validate $dir"
+            terraform -chdir="$dir" init -backend=false -input=false -no-color
+            terraform -chdir="$dir" validate -no-color || fail=1
+            echo "::endgroup::"
+          done
+          exit $fail
+
+      - uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: latest
+
+      - name: tflint
+        run: |
+          tflint --init
+          tflint --recursive --format compact
+
+  # -------------------------------------------------------------------------
+  # Static security scanning. Two independent engines on purpose -- they
+  # disagree often enough that one alone gives false confidence.
+  # -------------------------------------------------------------------------
+  scan:
+    name: checkov / trivy / conftest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: .
+          framework: terraform
+          quiet: true
+          soft_fail: false
+          output_format: cli,sarif
+          output_file_path: console,checkov.sarif
+          config_file: .checkov.yaml
+
+      - name: Upload Checkov SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: checkov.sarif
+          category: checkov
+
+      - name: Trivy config scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: config
+          scan-ref: .
+          exit-code: "1"
+          severity: HIGH,CRITICAL
+          trivyignores: .trivyignore
+
+      - name: Conftest (custom OPA policy unit tests)
+        run: |
+          curl -sSL -o conftest.tar.gz \
+            https://github.com/open-policy-agent/conftest/releases/download/v0.56.0/conftest_0.56.0_Linux_x86_64.tar.gz
+          tar xzf conftest.tar.gz conftest
+          ./conftest verify --policy policies
+
+  # -------------------------------------------------------------------------
+  # The control matrix has to stay honest: every control claimed in
+  # controls.yaml must name a Terraform address that actually exists, and
+  # CONTROLS.md must be the rendered output of controls.yaml.
+  # -------------------------------------------------------------------------
+  controls:
+    name: control matrix integrity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyyaml
+      - name: controls.yaml -> CONTROLS.md is current and every address resolves
+        run: python3 controls/render.py --check
+
+  secrets:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

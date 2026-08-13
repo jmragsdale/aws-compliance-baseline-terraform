@@ -1,0 +1,178 @@
+##############################################################################
+# Operational best practices for NIST SP 800-53 Rev 5 (trimmed).
+#
+# Organised by control family so a finding can be traced back to a family in an
+# SSP without a lookup table. Rules that duplicate the FedRAMP pack are omitted;
+# this pack carries the families FedRAMP-specific packs under-cover: AU-6
+# (review and analysis), CM-2/CM-3 (baseline configuration and change control),
+# SI-2 (flaw remediation) and CP-9 (backup).
+#
+# This is NOT the full published pack. See CONTROLS.md DET-006.
+##############################################################################
+Resources:
+  # --- AC: Access Control ---------------------------------------------------
+  AccessKeysRotated:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: nist-ac-2-access-keys-rotated
+      Description: AC-2(3) - disable identifiers after a defined period of inactivity.
+      Source:
+        Owner: AWS
+        SourceIdentifier: ACCESS_KEYS_ROTATED
+      InputParameters:
+        maxAccessKeyAge: "90"
+
+  IamUserGroupMembershipCheck:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: nist-ac-2-iam-user-group-membership-check
+      Description: AC-2 - every IAM user belongs to a group, so permissions are managed by role.
+      Source:
+        Owner: AWS
+        SourceIdentifier: IAM_USER_GROUP_MEMBERSHIP_CHECK
+
+  IamNoInlinePolicyCheck:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: nist-ac-6-iam-no-inline-policy-check
+      Description: AC-6 - inline policies are invisible to organization-wide review.
+      Source:
+        Owner: AWS
+        SourceIdentifier: IAM_NO_INLINE_POLICY_CHECK
+
+  # --- AU: Audit and Accountability ----------------------------------------
+  CloudTrailCloudWatchLogsEnabled:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: nist-au-6-cloud-trail-cloud-watch-logs-enabled
+      Description: AU-6(1) - trail events reach CloudWatch Logs so they can be alarmed on.
+      Source:
+        Owner: AWS
+        SourceIdentifier: CLOUD_TRAIL_CLOUD_WATCH_LOGS_ENABLED
+
+  CloudWatchLogGroupRetention:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: nist-au-11-cw-loggroup-retention-period-check
+      Description: AU-11 - audit records retained for the defined period.
+      Source:
+        Owner: AWS
+        SourceIdentifier: CW_LOGGROUP_RETENTION_PERIOD_CHECK
+      InputParameters:
+        MinRetentionTime: "365"
+
+  S3BucketLoggingEnabled:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: nist-au-2-s3-bucket-logging-enabled
+      Description: AU-2 - access to buckets is itself an audited event.
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_LOGGING_ENABLED
+
+  ApiGwExecutionLoggingEnabled:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: nist-au-2-api-gw-execution-logging-enabled
+      Description: AU-2 - API Gateway stages emit execution logs.
+      Source:
+        Owner: AWS
+        SourceIdentifier: API_GW_EXECUTION_LOGGING_ENABLED
+
+  # --- CM: Configuration Management ----------------------------------------
+  Ec2InstanceManagedBySsm:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: nist-cm-2-ec2-instance-managed-by-ssm
+      Description: CM-2 - instances are managed against a baseline rather than hand-built.
+      Source:
+        Owner: AWS
+        SourceIdentifier: EC2_INSTANCE_MANAGED_BY_SSM
+
+  EcrPrivateImageScanningEnabled:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: nist-ra-5-ecr-private-image-scanning-enabled
+      Description: RA-5 - container images are scanned for known vulnerabilities on push.
+      Source:
+        Owner: AWS
+        SourceIdentifier: ECR_PRIVATE_IMAGE_SCANNING_ENABLED
+
+  # --- SI: System and Information Integrity --------------------------------
+  Ec2ManagedInstancePatchComplianceStatusCheck:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: nist-si-2-ec2-patch-compliance-status-check
+      Description: SI-2 - flaw remediation is measured, not assumed.
+      Source:
+        Owner: AWS
+        SourceIdentifier: EC2_MANAGEDINSTANCE_PATCH_COMPLIANCE_STATUS_CHECK
+
+  GuardDutyNonArchivedFindings:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: nist-si-4-guardduty-non-archived-findings
+      Description: SI-4 - open GuardDuty findings must not accumulate unreviewed.
+      Source:
+        Owner: AWS
+        SourceIdentifier: GUARDDUTY_NON_ARCHIVED_FINDINGS
+      InputParameters:
+        daysHighSev: "1"
+        daysMediumSev: "7"
+        daysLowSev: "30"
+
+  # --- SC: System and Communications Protection ----------------------------
+  ElbTlsHttpsListenersOnly:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: nist-sc-8-elb-tls-https-listeners-only
+      Description: SC-8 - load balancers terminate TLS rather than plaintext HTTP.
+      Source:
+        Owner: AWS
+        SourceIdentifier: ELB_TLS_HTTPS_LISTENERS_ONLY
+
+  SnsEncryptedKms:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: nist-sc-28-sns-encrypted-kms
+      Description: SC-28 - SNS topics encrypted at rest.
+      Source:
+        Owner: AWS
+        SourceIdentifier: SNS_ENCRYPTED_KMS
+
+  SecretsManagerRotationEnabled:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: nist-ia-5-secretsmanager-rotation-enabled-check
+      Description: IA-5 - secrets rotate on a defined schedule.
+      Source:
+        Owner: AWS
+        SourceIdentifier: SECRETSMANAGER_ROTATION_ENABLED_CHECK
+
+  LambdaFunctionPublicAccessProhibited:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: nist-ac-3-lambda-function-public-access-prohibited
+      Description: AC-3 - no function is invocable by an anonymous principal.
+      Source:
+        Owner: AWS
+        SourceIdentifier: LAMBDA_FUNCTION_PUBLIC_ACCESS_PROHIBITED
+
+  # --- CP: Contingency Planning --------------------------------------------
+  EbsSnapshotPublicRestorableCheck:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: nist-cp-9-ebs-snapshot-public-restorable-check
+      Description: AC-3 / CP-9 - a publicly restorable snapshot is a full copy of the volume.
+      Source:
+        Owner: AWS
+        SourceIdentifier: EBS_SNAPSHOT_PUBLIC_RESTORABLE_CHECK
+
+  RdsInstancePublicAccessCheck:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: nist-sc-7-rds-instance-public-access-check
+      Description: SC-7 - databases are not internet-addressable.
+      Source:
+        Owner: AWS
+        SourceIdentifier: RDS_INSTANCE_PUBLIC_ACCESS_CHECK

@@ -1,0 +1,25 @@
+# Local gate that mirrors CI. Setup (once):
+#   pipx install pre-commit && pre-commit install
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.96.2
+    hooks:
+      - id: terraform_fmt
+      - id: terraform_validate
+        args: ["--tf-init-args=-backend=false"]
+      - id: terraform_tflint
+        args: ["--args=--only=terraform_deprecated_interpolation,terraform_unused_declarations,terraform_naming_convention"]
+
+  - repo: local
+    hooks:
+      - id: controls-matrix
+        name: control matrix is current
+        entry: python3 controls/render.py --check
+        language: system
+        pass_filenames: false
+        files: ^(controls/.*|terraform/.*)$

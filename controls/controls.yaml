@@ -1,0 +1,1441 @@
+# Machine-readable source of truth for CONTROLS.md.
+#
+# Rules of engagement for editing this file:
+#   1. Every control names Terraform addresses that exist. CI fails otherwise.
+#   2. Framework mappings are the controls the implementation *materially*
+#      contributes to, not every control it could be argued to touch. Padding
+#      this file is the easiest way to make the whole repo untrustworthy.
+#   3. `notes` is where limitations go. If a control only works in organization
+#      mode, only covers part of the framework control, or depends on something
+#      outside Terraform, say so there.
+#
+# Regenerate:  python3 controls/render.py
+# Verify:      python3 controls/render.py --check
+
+metadata:
+  cloud: aws
+  cloud_name: "Amazon Web Services"
+
+  frameworks:
+    fedramp:
+      name: "FedRAMP Rev 5"
+      version: "Rev 5 (Moderate / High)"
+      short: "FedRAMP"
+    nist_800_53_r5:
+      name: "NIST SP 800-53 Rev 5"
+      version: "Rev 5"
+      short: "800-53r5"
+    cis:
+      name: "CIS AWS Foundations Benchmark"
+      version: "v5.0"
+      short: "CIS v5.0"
+
+  framework_notes:
+    - >-
+      FedRAMP Rev 5 control identifiers *are* NIST SP 800-53 Rev 5 identifiers -
+      FedRAMP is a baseline selection plus parameter values, not a separate
+      catalogue. The two columns therefore overlap heavily by construction. They
+      are kept separate because the FedRAMP column reflects controls whose
+      *parameters* this repo actually sets from `var.fedramp_baseline`, while
+      the 800-53 column reflects the base control the implementation addresses.
+    - >-
+      CIS AWS Foundations Benchmark v5.0 section numbers are used verbatim.
+      Where a control is implemented preventively here but the benchmark checks
+      it detectively (or vice versa), the mapping still applies - the benchmark
+      does not care how you got there.
+    - >-
+      No control in this file claims coverage of an administrative or procedural
+      family. AT (awareness and training), PS (personnel security), PE (physical
+      protection) and most of PL/PM have no Terraform representation and are
+      absent on purpose rather than by oversight.
+    - >-
+      Controls marked `demo_safe: false` require an AWS Organizations management
+      account or a delegated administrator. They plan cleanly in
+      `examples/single-account` because they are count-gated off, which means
+      that example is a *smaller* posture, not the same posture more cheaply.
+
+controls:
+  # =======================================================================
+  # ORG - Organization-level preventive guardrails
+  # =======================================================================
+  - id: ORG-001
+    title: "Root account usage denied organization-wide"
+    module: preventive
+    enforcement: preventive
+    frameworks:
+      fedramp: [AC-6(9), IA-2(1), AC-2]
+      nist_800_53_r5: [AC-6(9), AC-2]
+      cis: ["1.7"]
+    implementation:
+      - preventive:aws_organizations_policy.identity_guardrails
+      - preventive:aws_organizations_policy_attachment.scp
+    demo_safe: false
+    billable: false
+    notes: >-
+      Denies every action for the Root principal type. The root user can still
+      perform the handful of operations AWS exempts from SCPs entirely
+      (closing the account, changing the root password, changing the support
+      plan), which is why CIS also requires hardware MFA on root - a control
+      no Terraform resource can create.
+
+  - id: ORG-002
+    title: "Disabling CloudTrail, Config, GuardDuty, Security Hub, Macie, Inspector or Access Analyzer denied"
+    module: preventive
+    enforcement: preventive
+    frameworks:
+      fedramp: [AU-9, SI-4, CM-7]
+      nist_800_53_r5: [AU-9, SI-4, CM-7]
+      cis: ["3.1", "3.5"]
+    implementation:
+      - preventive:aws_organizations_policy.audit_guardrails
+      - preventive:aws_organizations_policy_attachment.scp
+    demo_safe: false
+    billable: false
+    notes: >-
+      Exempts the break-glass roles named in `var.break_glass_role_names`. That
+      exemption is deliberate and is itself a monitored path - see LOG-010,
+      which alarms on CloudTrail and Config configuration changes regardless of
+      who made them.
+
+  - id: ORG-003
+    title: "Leaving or dismantling the organization denied"
+    module: preventive
+    enforcement: preventive
+    frameworks:
+      fedramp: [AC-3, CM-7]
+      nist_800_53_r5: [AC-3, CM-7]
+      cis: []
+    implementation:
+      - preventive:aws_organizations_policy.audit_guardrails
+    demo_safe: false
+    billable: false
+    notes: >-
+      This is the guardrail every other SCP depends on. A member account that
+      can call LeaveOrganization sheds all of them in one API call.
+
+  - id: ORG-004
+    title: "Central log archive protected from deletion and policy change by SCP"
+    module: preventive
+    enforcement: preventive
+    frameworks:
+      fedramp: [AU-9, AU-11]
+      nist_800_53_r5: [AU-9, AU-11]
+      cis: ["3.3"]
+    implementation:
+      - preventive:aws_organizations_policy.audit_guardrails
+      - logging:data.aws_iam_policy_document.log_archive
+      - logging:aws_s3_bucket_policy.log_archive
+    demo_safe: false
+    billable: false
+    notes: >-
+      Two independent layers (SCP and bucket policy) plus Object Lock. The
+      statement is omitted entirely when `enable_central_logging` is false,
+      because an SCP naming a non-existent bucket is confusing rather than safe.
+
+  - id: ORG-005
+    title: "Deleting audit alarms, metric filters or log groups denied"
+    module: preventive
+    enforcement: preventive
+    frameworks:
+      fedramp: [AU-9, SI-7, AU-6]
+      nist_800_53_r5: [AU-9, SI-7]
+      cis: []
+    implementation:
+      - preventive:aws_organizations_policy.audit_guardrails
+    demo_safe: false
+    billable: false
+
+  - id: ORG-006
+    title: "Operations confined to the assessed regions"
+    module: preventive
+    enforcement: preventive
+    frameworks:
+      fedramp: [CA-9, SC-7, AC-3]
+      nist_800_53_r5: [CA-9, SC-7]
+      cis: []
+    implementation:
+      - preventive:aws_organizations_policy.region_guardrails
+      - preventive:aws_organizations_policy_attachment.scp
+    demo_safe: false
+    billable: false
+    notes: >-
+      The `NotAction` list carries the global endpoints (IAM, STS, CloudFront,
+      Route 53, Organizations and friends) which are always evaluated in
+      us-east-1. Omitting any of them breaks the organization in ways that are
+      slow to diagnose. Verify the list against current AWS documentation before
+      attaching at the root.
+
+  - id: ORG-007
+    title: "EC2 instances must require IMDSv2"
+    module: preventive
+    enforcement: preventive
+    frameworks:
+      fedramp: [CM-6, CM-7, AC-6]
+      nist_800_53_r5: [CM-6, CM-7]
+      cis: ["5.6"]
+    implementation:
+      - preventive:aws_organizations_policy.compute_guardrails
+    demo_safe: false
+    billable: false
+    notes: >-
+      Closes the SSRF-to-credential-theft path. Also denies
+      ModifyInstanceMetadataOptions so the setting cannot be weakened after
+      launch.
+
+  - id: ORG-008
+    title: "IMDS hop limit above 1 denied"
+    module: preventive
+    enforcement: preventive
+    frameworks:
+      fedramp: [CM-7, AC-6]
+      nist_800_53_r5: [CM-7]
+      cis: []
+    implementation:
+      - preventive:aws_organizations_policy.compute_guardrails
+    demo_safe: false
+    billable: false
+    notes: >-
+      A hop limit above 1 lets containers on the host reach instance metadata,
+      which defeats most of IMDSv2's benefit. Note this will break some
+      container runtimes that legitimately need a hop limit of 2 - test before
+      attaching at the root.
+
+  - id: ORG-009
+    title: "Resource control policy: organization data perimeter"
+    module: preventive
+    enforcement: preventive
+    frameworks:
+      fedramp: [SC-7, AC-4, AC-21]
+      nist_800_53_r5: [SC-7, AC-4, AC-21]
+      cis: []
+    implementation:
+      - preventive:aws_organizations_policy.rcp_data_perimeter
+      - preventive:aws_organizations_policy_attachment.rcp
+    demo_safe: false
+    billable: false
+    notes: >-
+      RCPs apply only to S3, STS, KMS, SQS and Secrets Manager. Resources of any
+      other type are not covered, and describing this as a total perimeter would
+      be wrong.
+
+  - id: ORG-010
+    title: "Resource control policy: confused-deputy and plaintext transport denial"
+    module: preventive
+    enforcement: preventive
+    frameworks:
+      fedramp: [SC-7, SC-8, AC-4]
+      nist_800_53_r5: [SC-7, SC-8]
+      cis: ["2.1.2"]
+    implementation:
+      - preventive:aws_organizations_policy.rcp_confused_deputy
+      - preventive:aws_organizations_policy_attachment.rcp
+    demo_safe: false
+    billable: false
+
+  - id: ORG-011
+    title: "Guardrails attached to OU or root targets within the Organizations quota"
+    module: preventive
+    enforcement: foundational
+    frameworks:
+      fedramp: [CM-7, AC-3]
+      nist_800_53_r5: [CM-7]
+      cis: []
+    implementation:
+      - preventive:aws_organizations_policy_attachment.scp
+      - preventive:aws_organizations_policy_attachment.rcp
+    demo_safe: false
+    billable: false
+    notes: >-
+      AWS allows at most five policies of each type per target. The statements
+      are therefore bundled into five themed SCPs rather than one policy per
+      rule; a `check` block fails the plan if that ceiling is ever exceeded, and
+      policies/guardrails.rego asserts the same thing against the plan JSON.
+
+  - id: ORG-012
+    title: "Deployment scope gating so organization-only controls plan cleanly in a single account"
+    module: root
+    enforcement: foundational
+    frameworks:
+      fedramp: [CM-2, SA-3]
+      nist_800_53_r5: [CM-2]
+      cis: []
+    implementation:
+      - root:module.preventive
+      - root:module.detective
+    demo_safe: true
+    billable: false
+    notes: >-
+      `var.deployment_scope = "single_account"` count-gates every Organizations
+      API call. The result is a genuinely smaller posture, not the same posture
+      run cheaply - see examples/single-account/README.md for exactly what is
+      lost.
+
+  # =======================================================================
+  # IAM - Identity and access
+  # =======================================================================
+  - id: IAM-001
+    title: "IAM user access key and login profile creation denied"
+    module: preventive
+    enforcement: preventive
+    frameworks:
+      fedramp: [IA-5(1), AC-2, IA-2]
+      nist_800_53_r5: [IA-5(1), AC-2]
+      cis: ["1.4", "1.14"]
+    implementation:
+      - preventive:aws_organizations_policy.identity_guardrails
+    demo_safe: false
+    billable: false
+    notes: >-
+      Pushes all human and workload access onto roles and Identity Center. Does
+      not remove access keys that already exist; use the credential report from
+      scripts/export-evidence.sh to find those.
+
+  - id: IAM-002
+    title: "MFA required for privileged identity and key operations"
+    module: preventive
+    enforcement: preventive
+    frameworks:
+      fedramp: [IA-2(1), IA-2(2), AC-6(9)]
+      nist_800_53_r5: [IA-2(1), IA-2(2)]
+      cis: ["1.10"]
+    implementation:
+      - preventive:aws_organizations_policy.identity_guardrails
+    demo_safe: false
+    billable: false
+    notes: >-
+      Covers deleting principals, removing permissions boundaries and disabling
+      or scheduling deletion of KMS keys. It does not enforce MFA on every
+      console login - that lives in Identity Center or in the IdP, neither of
+      which this repo configures.
+
+  - id: IAM-003
+    title: "IAM account password policy at baseline-selected strength"
+    module: preventive
+    enforcement: preventive
+    frameworks:
+      fedramp: [IA-5(1), IA-5]
+      nist_800_53_r5: [IA-5(1)]
+      cis: ["1.8", "1.9"]
+    implementation:
+      - preventive:aws_iam_account_password_policy.this
+    demo_safe: true
+    billable: false
+    notes: >-
+      14 characters and 90-day maximum age at Moderate, 20 characters and 60
+      days at High. Applies only to IAM users with console passwords, which the
+      identity guardrail (IAM-001) is trying to eliminate entirely - this is the
+      belt to that suspenders.
+
+  - id: IAM-004
+    title: "External access analysis across the organization"
+    module: detective
+    enforcement: detective
+    frameworks:
+      fedramp: [AC-3, AC-21, CA-7]
+      nist_800_53_r5: [AC-3, AC-21]
+      cis: ["1.20"]
+    implementation:
+      - detective:aws_accessanalyzer_analyzer.external
+    demo_safe: true
+    billable: true
+    notes: >-
+      Uses automated reasoning rather than heuristics, so a "no external access"
+      result is a proof over the resource policies rather than a scan that found
+      nothing. Falls back to ACCOUNT scope in single-account mode.
+
+  - id: IAM-005
+    title: "Unused access, roles and credentials analysis"
+    module: detective
+    enforcement: detective
+    frameworks:
+      fedramp: [AC-6(7), AC-2(3), AC-6]
+      nist_800_53_r5: [AC-6(7), AC-2(3)]
+      cis: ["1.12"]
+    implementation:
+      - detective:aws_accessanalyzer_analyzer.unused
+    demo_safe: true
+    billable: true
+    notes: >-
+      Metered per IAM role and user analysed per month, which makes it the one
+      Access Analyzer feature with a real bill attached. Threshold is 90 days at
+      Moderate, 45 at High.
+
+  - id: IAM-006
+    title: "Service roles scoped to a single delivery path"
+    module: detective
+    enforcement: foundational
+    frameworks:
+      fedramp: [AC-6, CM-7]
+      nist_800_53_r5: [AC-6, CM-7]
+      cis: ["1.16"]
+    implementation:
+      - detective:aws_iam_role.config
+      - detective:aws_iam_role_policy.config_delivery
+      - detective:data.aws_iam_policy_document.config_delivery
+    demo_safe: true
+    billable: false
+    notes: >-
+      The Config recorder uses the AWS-managed read-only policy plus an inline
+      policy limited to one bucket prefix, rather than a second managed policy
+      with a broad write surface.
+
+  - id: IAM-007
+    title: "CloudTrail-to-CloudWatch role limited to one log group"
+    module: logging
+    enforcement: foundational
+    frameworks:
+      fedramp: [AC-6, AU-9]
+      nist_800_53_r5: [AC-6, AU-9]
+      cis: []
+    implementation:
+      - logging:aws_iam_role.cloudtrail_cwl
+      - logging:aws_iam_role_policy.cloudtrail_cwl
+      - logging:data.aws_iam_policy_document.cloudtrail_cwl_assume
+    demo_safe: true
+    billable: false
+
+  - id: IAM-008
+    title: "Replication role limited to the archive source and replica"
+    module: logging
+    enforcement: foundational
+    frameworks:
+      fedramp: [AC-6, CP-9]
+      nist_800_53_r5: [AC-6]
+      cis: []
+    implementation:
+      - logging:aws_iam_role.replication
+      - logging:aws_iam_role_policy.replication
+      - logging:data.aws_iam_policy_document.replication
+    demo_safe: false
+    billable: false
+    notes: "Only created when the FedRAMP High baseline turns replication on."
+
+  # =======================================================================
+  # DAT - Data protection
+  # =======================================================================
+  - id: DAT-001
+    title: "Unencrypted S3 PUT denied (aws:kms required at High)"
+    module: preventive
+    enforcement: preventive
+    frameworks:
+      fedramp: [SC-28, SC-28(1)]
+      nist_800_53_r5: [SC-28, SC-28(1)]
+      cis: ["2.1.1"]
+    implementation:
+      - preventive:aws_organizations_policy.data_guardrails
+    demo_safe: false
+    billable: false
+    notes: >-
+      The condition changes with the baseline: Moderate rejects PUTs with no
+      server-side encryption at all, High rejects anything that is not aws:kms.
+      Switching to High without also enabling customer-managed keys will start
+      denying legitimate writes - the root module has a `check` block for this.
+
+  - id: DAT-002
+    title: "Unencrypted EBS volume, snapshot and snapshot-copy creation denied"
+    module: preventive
+    enforcement: preventive
+    frameworks:
+      fedramp: [SC-28]
+      nist_800_53_r5: [SC-28]
+      cis: ["2.2.1"]
+    implementation:
+      - preventive:aws_organizations_policy.data_guardrails
+    demo_safe: false
+    billable: false
+
+  - id: DAT-003
+    title: "Public S3 ACL grants and public bucket policies denied"
+    module: preventive
+    enforcement: preventive
+    frameworks:
+      fedramp: [AC-3, AC-21, SC-7]
+      nist_800_53_r5: [AC-3, AC-21]
+      cis: ["2.1.4"]
+    implementation:
+      - preventive:aws_organizations_policy.data_guardrails
+    demo_safe: false
+    billable: false
+
+  - id: DAT-004
+    title: "Account-level S3 Block Public Access, all four settings"
+    module: preventive
+    enforcement: preventive
+    frameworks:
+      fedramp: [AC-3, AC-21]
+      nist_800_53_r5: [AC-3]
+      cis: ["2.1.4"]
+    implementation:
+      - preventive:aws_s3_account_public_access_block.this
+    demo_safe: true
+    billable: false
+    notes: >-
+      Overrides every bucket-level setting in the account, including buckets
+      created by modules nobody reviewed. Paired with DAT-003, which denies
+      turning it off.
+
+  - id: DAT-005
+    title: "EBS encryption by default, pointed at a customer-managed key"
+    module: preventive
+    enforcement: preventive
+    frameworks:
+      fedramp: [SC-28, SC-12]
+      nist_800_53_r5: [SC-28, SC-12]
+      cis: ["2.2.1"]
+    implementation:
+      - preventive:aws_ebs_encryption_by_default.this
+      - preventive:aws_ebs_default_kms_key.this
+    demo_safe: true
+    billable: true
+    notes: >-
+      Account and region scoped, so it must be applied in every region the
+      organization operates in - the region allow-list (ORG-006) is what keeps
+      that list short. The CMK is only set when `enable_customer_managed_keys`
+      is true; otherwise the AWS-managed aws/ebs key remains.
+
+  - id: DAT-006
+    title: "Disabling EBS encryption-by-default denied"
+    module: preventive
+    enforcement: preventive
+    frameworks:
+      fedramp: [SC-12, SC-28, CM-7]
+      nist_800_53_r5: [SC-12, CM-7]
+      cis: []
+    implementation:
+      - preventive:aws_organizations_policy.data_guardrails
+    demo_safe: false
+    billable: false
+    notes: "Closes the 'disable the default, then create the volume' bypass of DAT-002."
+
+  - id: DAT-007
+    title: "Sensitive data discovery in S3"
+    module: detective
+    enforcement: detective
+    frameworks:
+      fedramp: [RA-2, MP-4, SC-28]
+      nist_800_53_r5: [RA-2, MP-4]
+      cis: []
+    implementation:
+      - detective:aws_macie2_account.this
+      - detective:aws_macie2_organization_admin_account.this
+    demo_safe: true
+    billable: true
+    notes: >-
+      Answers "where does controlled unclassified information actually live",
+      which the data flow diagram in an SSP asserts and rarely proves. Metered
+      per GB inspected; off by default for that reason.
+
+  - id: DAT-008
+    title: "Block Public Access and ownership controls on every bucket this repo creates"
+    module: logging
+    enforcement: preventive
+    frameworks:
+      fedramp: [AC-3, AC-21]
+      nist_800_53_r5: [AC-3]
+      cis: ["2.1.4"]
+    implementation:
+      - logging:aws_s3_bucket_public_access_block.log_archive
+      - logging:aws_s3_bucket_public_access_block.access_logs
+      - logging:aws_s3_bucket_ownership_controls.log_archive
+      - evidence:aws_s3_bucket_public_access_block.evidence
+      - evidence:aws_s3_bucket_ownership_controls.evidence
+    demo_safe: true
+    billable: false
+    notes: >-
+      BucketOwnerEnforced disables ACLs entirely, which turns "no public ACL"
+      from a thing to keep checking into a structural property.
+
+  # =======================================================================
+  # ENC - Encryption and key management
+  # =======================================================================
+  - id: ENC-001
+    title: "Dedicated audit-log CMK with baseline-driven rotation"
+    module: encryption
+    enforcement: foundational
+    frameworks:
+      fedramp: [SC-12, SC-12(1), SC-28, AU-9]
+      nist_800_53_r5: [SC-12, SC-12(1), SC-28]
+      cis: ["3.7"]
+    implementation:
+      - encryption:aws_kms_key.logs
+      - encryption:aws_kms_alias.logs
+    demo_safe: true
+    billable: true
+    notes: "Rotation every 365 days at Moderate, every 90 at High."
+
+  - id: ENC-002
+    title: "Dedicated compliance-evidence CMK"
+    module: encryption
+    enforcement: foundational
+    frameworks:
+      fedramp: [SC-12, SC-28, AU-9]
+      nist_800_53_r5: [SC-12, SC-28]
+      cis: ["3.7"]
+    implementation:
+      - encryption:aws_kms_key.evidence
+      - encryption:aws_kms_alias.evidence
+    demo_safe: true
+    billable: true
+
+  - id: ENC-003
+    title: "Dedicated general workload CMK for EBS, RDS, Secrets Manager and SSM"
+    module: encryption
+    enforcement: foundational
+    frameworks:
+      fedramp: [SC-12, SC-28]
+      nist_800_53_r5: [SC-12, SC-28]
+      cis: ["3.7"]
+    implementation:
+      - encryption:aws_kms_key.general
+      - encryption:aws_kms_alias.general
+    demo_safe: true
+    billable: true
+
+  - id: ENC-004
+    title: "Least-privilege key policies with an organization perimeter"
+    module: encryption
+    enforcement: preventive
+    frameworks:
+      fedramp: [AC-6, SC-12, SC-7]
+      nist_800_53_r5: [AC-6, SC-12]
+      cis: []
+    implementation:
+      - encryption:data.aws_iam_policy_document.logs
+      - encryption:data.aws_iam_policy_document.evidence
+      - encryption:data.aws_iam_policy_document.general
+    demo_safe: true
+    billable: false
+    notes: >-
+      Service principal grants carry aws:SourceArn or aws:SourceAccount
+      conditions so another account's CloudTrail cannot use our key. The general
+      key additionally denies all use by principals outside the organization.
+
+  - id: ENC-005
+    title: "Multi-Region replica key so replicated audit records stay decryptable"
+    module: encryption
+    enforcement: foundational
+    frameworks:
+      fedramp: [CP-9, CP-10, SC-12]
+      nist_800_53_r5: [CP-9, SC-12]
+      cis: []
+    implementation:
+      - encryption:aws_kms_replica_key.logs
+      - encryption:aws_kms_alias.logs_replica
+    demo_safe: false
+    billable: true
+    notes: >-
+      Only created at the High baseline. A cross-region replica of KMS-encrypted
+      objects without a replica key is a copy nobody can read, which is a
+      surprisingly common way to fail a recovery test.
+
+  - id: ENC-006
+    title: "Default encryption on the log archive and evidence buckets"
+    module: logging
+    enforcement: preventive
+    frameworks:
+      fedramp: [SC-28, SC-28(1)]
+      nist_800_53_r5: [SC-28]
+      cis: ["2.1.1", "3.4"]
+    implementation:
+      - logging:aws_s3_bucket_server_side_encryption_configuration.log_archive
+      - evidence:aws_s3_bucket_server_side_encryption_configuration.evidence
+    demo_safe: true
+    billable: false
+    notes: >-
+      Falls back to SSE-S3 when `enable_customer_managed_keys` is false. The CIS
+      3.4 check for a CMK-encrypted trail only passes with CMKs on. Bucket keys
+      are enabled to keep KMS request charges sane on log workloads.
+
+  - id: ENC-007
+    title: "TLS required for every bucket, topic and queue"
+    module: logging
+    enforcement: preventive
+    frameworks:
+      fedramp: [SC-8, SC-8(1), SC-13]
+      nist_800_53_r5: [SC-8, SC-8(1)]
+      cis: ["2.1.2"]
+    implementation:
+      - logging:data.aws_iam_policy_document.log_archive
+      - logging:data.aws_iam_policy_document.access_logs
+      - logging:data.aws_iam_policy_document.security_alarms
+      - evidence:data.aws_iam_policy_document.evidence
+      - evidence:data.aws_iam_policy_document.findings_dlq
+    demo_safe: true
+    billable: false
+    notes: >-
+      The archive additionally denies TLS below 1.2 via s3:TlsVersion, which is
+      the FedRAMP floor and is not covered by aws:SecureTransport alone.
+
+  - id: ENC-008
+    title: "Alarm notifications encrypted at rest"
+    module: logging
+    enforcement: preventive
+    frameworks:
+      fedramp: [SC-28]
+      nist_800_53_r5: [SC-28]
+      cis: []
+    implementation:
+      - logging:aws_sns_topic.security_alarms
+    demo_safe: true
+    billable: false
+    notes: >-
+      Alarm bodies quote the offending principal and API call, which is exactly
+      the reconnaissance an attacker would like. Falls back to the AWS-managed
+      alias/aws/sns key when no CMK exists.
+
+  - id: ENC-009
+    title: "Evidence pipeline encrypted in the buffer and in the queue"
+    module: evidence
+    enforcement: preventive
+    frameworks:
+      fedramp: [SC-28, SC-8]
+      nist_800_53_r5: [SC-28]
+      cis: []
+    implementation:
+      - evidence:aws_kinesis_firehose_delivery_stream.findings
+      - evidence:aws_sqs_queue.findings_dlq
+    demo_safe: true
+    billable: true
+    notes: "Findings sit in the Firehose buffer for up to five minutes before landing."
+
+  # =======================================================================
+  # LOG - Audit logging
+  # =======================================================================
+  - id: LOG-001
+    title: "Organization CloudTrail covering all regions and global services"
+    module: logging
+    enforcement: foundational
+    frameworks:
+      fedramp: [AU-2, AU-3, AU-12]
+      nist_800_53_r5: [AU-2, AU-3, AU-12]
+      cis: ["3.1"]
+    implementation:
+      - logging:aws_cloudtrail.org
+    demo_safe: true
+    billable: true
+    notes: >-
+      Organization trails cannot be stopped or reconfigured by member accounts,
+      which is what makes AU-9 real rather than aspirational. In single-account
+      mode this becomes an ordinary account trail and a sufficiently privileged
+      local principal can turn it off.
+
+  - id: LOG-002
+    title: "CloudTrail log file validation (digest files)"
+    module: logging
+    enforcement: foundational
+    frameworks:
+      fedramp: [AU-9(3), SI-7, AU-10]
+      nist_800_53_r5: [AU-9(3), SI-7]
+      cis: ["3.2"]
+    implementation:
+      - logging:aws_cloudtrail.org
+    demo_safe: true
+    billable: false
+    notes: >-
+      Hourly SHA-256 digest files. This is the difference between "we have logs"
+      and "we can prove these are the logs", which is the question an assessor
+      actually asks.
+
+  - id: LOG-003
+    title: "S3 object-level and Lambda invoke data events"
+    module: logging
+    enforcement: detective
+    frameworks:
+      fedramp: [AU-2, AU-12]
+      nist_800_53_r5: [AU-2, AU-12]
+      cis: ["3.8"]
+    implementation:
+      - logging:aws_cloudtrail.org
+    demo_safe: true
+    billable: true
+    notes: >-
+      Off by default and genuinely expensive on busy accounts. The selector
+      excludes the archive bucket's own delivery writes, which would otherwise
+      generate a self-referential feedback loop.
+
+  - id: LOG-004
+    title: "Central log archive with Object Lock in COMPLIANCE mode"
+    module: logging
+    enforcement: foundational
+    frameworks:
+      fedramp: [AU-9, AU-9(3), AU-11]
+      nist_800_53_r5: [AU-9, AU-11]
+      cis: ["3.3"]
+    implementation:
+      - logging:aws_s3_bucket.log_archive
+      - logging:aws_s3_bucket_object_lock_configuration.log_archive
+    demo_safe: true
+    billable: true
+    notes: >-
+      COMPLIANCE mode cannot be shortened or bypassed by anyone including the
+      account root and AWS Support. That is the point, and it is also why the
+      bucket policy blocks `terraform destroy` of this bucket. Break-glass is an
+      AWS Support case, not a Terraform flag. 365-day window at Moderate,
+      2555-day at High.
+
+  - id: LOG-005
+    title: "Versioning on every audit and evidence bucket"
+    module: logging
+    enforcement: foundational
+    frameworks:
+      fedramp: [AU-9, CP-9, SI-7]
+      nist_800_53_r5: [AU-9, CP-9]
+      cis: []
+    implementation:
+      - logging:aws_s3_bucket_versioning.log_archive
+      - logging:aws_s3_bucket_versioning.access_logs
+      - evidence:aws_s3_bucket_versioning.evidence
+    demo_safe: true
+    billable: true
+    notes: "Prerequisite for both Object Lock and replication; neither works without it."
+
+  - id: LOG-006
+    title: "Lifecycle tiering aligned to the retention window"
+    module: logging
+    enforcement: foundational
+    frameworks:
+      fedramp: [AU-11, AU-4]
+      nist_800_53_r5: [AU-11, AU-4]
+      cis: []
+    implementation:
+      - logging:aws_s3_bucket_lifecycle_configuration.log_archive
+      - logging:aws_s3_bucket_lifecycle_configuration.access_logs
+    demo_safe: true
+    billable: false
+    notes: >-
+      Expiration is deliberately set one day beyond the Object Lock window; set
+      it earlier and S3 refuses every delete, generating noise and no savings.
+
+  - id: LOG-007
+    title: "S3 server access logging on the archive"
+    module: logging
+    enforcement: detective
+    frameworks:
+      fedramp: [AU-2, AU-9(4)]
+      nist_800_53_r5: [AU-2, AU-9(4)]
+      cis: ["3.6"]
+    implementation:
+      - logging:aws_s3_bucket.access_logs
+      - logging:aws_s3_bucket_logging.log_archive
+      - logging:aws_s3_bucket_policy.access_logs
+    demo_safe: true
+    billable: true
+    notes: >-
+      Without this, a principal who can read the audit archive leaves no trace
+      of having done so. The access-log bucket has no Object Lock, because S3
+      will not deliver access logs into a bucket with a default retention period.
+
+  - id: LOG-008
+    title: "Cross-region replication of audit records with a 15-minute SLA"
+    module: logging
+    enforcement: foundational
+    frameworks:
+      fedramp: [CP-9, CP-9(1), CP-10]
+      nist_800_53_r5: [CP-9, CP-10]
+      cis: []
+    implementation:
+      - logging:aws_s3_bucket_replication_configuration.log_archive
+      - logging:aws_s3_bucket.log_archive_replica
+      - logging:aws_s3_bucket_object_lock_configuration.log_archive_replica
+      - logging:aws_s3_bucket_lifecycle_configuration.log_archive_replica
+    demo_safe: false
+    billable: true
+    notes: >-
+      High baseline only. Delete-marker replication is deliberately disabled so
+      a deletion in the primary cannot hide the object in the replica. The
+      replica carries its own Object Lock, because replication copies objects
+      and not bucket-level protections.
+
+  - id: LOG-009
+    title: "CloudWatch Logs retention for trail events"
+    module: logging
+    enforcement: foundational
+    frameworks:
+      fedramp: [AU-11, AU-6(1)]
+      nist_800_53_r5: [AU-11, AU-6(1)]
+      cis: []
+    implementation:
+      - logging:aws_cloudwatch_log_group.cloudtrail
+    demo_safe: true
+    billable: true
+    notes: "365 days at Moderate, 1827 at High. Encrypted with the logs CMK when enabled."
+
+  - id: LOG-010
+    title: "Fifteen CIS metric filters and alarms on the trail log group"
+    module: logging
+    enforcement: detective
+    frameworks:
+      fedramp: [AU-6, AU-6(1), SI-4(4), AC-7]
+      nist_800_53_r5: [AU-6, AU-6(1), SI-4(4)]
+      cis: ["4.1", "4.2", "4.3", "4.4", "4.5", "4.6", "4.7", "4.8", "4.9", "4.10", "4.11", "4.12", "4.13", "4.14", "4.15"]
+    implementation:
+      - logging:aws_cloudwatch_log_metric_filter.cis
+      - logging:aws_cloudwatch_metric_alarm.cis
+    demo_safe: true
+    billable: true
+    notes: >-
+      All fifteen of CIS section 4, generated from one table so none can quietly
+      go missing. Each carries a default_value of 0 so a quiet period produces a
+      real datapoint instead of INSUFFICIENT_DATA, which on a dashboard looks
+      identical to "working fine".
+
+  - id: LOG-011
+    title: "Alarm on the audit trail itself failing"
+    module: logging
+    enforcement: detective
+    frameworks:
+      fedramp: [AU-5, AU-5(1), SI-4]
+      nist_800_53_r5: [AU-5, AU-5(1)]
+      cis: []
+    implementation:
+      - logging:aws_cloudwatch_metric_alarm.trail_delivery_failure
+    demo_safe: true
+    billable: true
+    notes: >-
+      Watches for the *absence* of log delivery, because a trail that stops is
+      silent by construction. treat_missing_data is set to breaching for the
+      same reason.
+
+  - id: LOG-012
+    title: "Single SNS topic for every security alarm, with an optional subscription"
+    module: logging
+    enforcement: detective
+    frameworks:
+      fedramp: [IR-4, IR-5, AU-6, SI-4]
+      nist_800_53_r5: [IR-4, IR-5, AU-6]
+      cis: ["4.16"]
+    implementation:
+      - logging:aws_sns_topic.security_alarms
+      - logging:aws_sns_topic_policy.security_alarms
+      - logging:aws_sns_topic_subscription.security_contact
+    demo_safe: true
+    billable: false
+    notes: >-
+      Email subscriptions still need the confirmation click; Terraform cannot
+      complete that and the subscription sits in PendingConfirmation until
+      someone does. An unconfirmed subscription means the alarms fire into
+      nothing.
+
+  - id: LOG-013
+    title: "Bucket policy denying archive tampering and non-organization access"
+    module: logging
+    enforcement: preventive
+    frameworks:
+      fedramp: [AU-9, SC-7, AC-3]
+      nist_800_53_r5: [AU-9, SC-7]
+      cis: []
+    implementation:
+      - logging:aws_s3_bucket_policy.log_archive
+      - logging:data.aws_iam_policy_document.log_archive
+    demo_safe: true
+    billable: false
+    notes: >-
+      Denies DeleteBucket, DeleteBucketPolicy, PutBucketVersioning,
+      PutEncryptionConfiguration and PutBucketObjectLockConfiguration for every
+      principal, with no exemption. This is intentionally stronger than the SCP
+      and intentionally blocks `terraform destroy`.
+
+  # =======================================================================
+  # DET - Detective controls
+  # =======================================================================
+  - id: DET-001
+    title: "Security Hub enabled with per-standard control findings"
+    module: detective
+    enforcement: detective
+    frameworks:
+      fedramp: [CA-7, RA-5, SI-4]
+      nist_800_53_r5: [CA-7, RA-5]
+      cis: ["4.16"]
+    implementation:
+      - detective:aws_securityhub_account.this
+    demo_safe: true
+    billable: true
+    notes: >-
+      control_finding_generator is STANDARD_CONTROL so a resource failing three
+      standards produces three pieces of evidence rather than one ambiguous one.
+      Security Hub makes nothing compliant; it continuously reports which
+      published checks you currently fail.
+
+  - id: DET-002
+    title: "CIS AWS Foundations Benchmark v5.0 standard subscription"
+    module: detective
+    enforcement: detective
+    frameworks:
+      fedramp: [CA-7, CM-6]
+      nist_800_53_r5: [CA-7, CM-6]
+      cis: ["1.1", "2.1.1", "3.1", "4.1", "5.1"]
+    implementation:
+      - detective:aws_securityhub_standards_subscription.cis
+    demo_safe: true
+    billable: true
+    notes: >-
+      The standards ARN is version-pinned. AWS publishes new benchmark versions
+      without deprecating the old, and an unpinned subscription silently changes
+      which checks you are measured against between applies.
+
+  - id: DET-003
+    title: "NIST SP 800-53 Rev 5 standard subscription"
+    module: detective
+    enforcement: detective
+    frameworks:
+      fedramp: [CA-7, CA-2, RA-5]
+      nist_800_53_r5: [CA-7, CA-2]
+      cis: []
+    implementation:
+      - detective:aws_securityhub_standards_subscription.nist
+    demo_safe: true
+    billable: true
+    notes: >-
+      Roughly 240 automated checks tagged with 800-53 control identifiers, which
+      is what makes a Security Hub export usable as evidence against a control
+      set rather than as a security score.
+
+  - id: DET-004
+    title: "AWS Foundational Security Best Practices standard subscription"
+    module: detective
+    enforcement: detective
+    frameworks:
+      fedramp: [CA-7, SI-2]
+      nist_800_53_r5: [CA-7, SI-2]
+      cis: []
+    implementation:
+      - detective:aws_securityhub_standards_subscription.fsbp
+    demo_safe: true
+    billable: true
+    notes: >-
+      Not a compliance framework. Included because it covers service-specific
+      misconfigurations that neither CIS nor the NIST standard reaches.
+
+  - id: DET-005
+    title: "Security Hub delegated administration and organization auto-enable"
+    module: detective
+    enforcement: detective
+    frameworks:
+      fedramp: [AC-5, CA-7, CM-2]
+      nist_800_53_r5: [AC-5, CA-7]
+      cis: []
+    implementation:
+      - detective:aws_securityhub_organization_admin_account.this
+      - detective:aws_securityhub_organization_configuration.this
+      - detective:aws_securityhub_finding_aggregator.this
+      - detective:aws_securityhub_configuration_policy.baseline
+      - detective:aws_securityhub_configuration_policy_association.targets
+    demo_safe: false
+    billable: true
+    notes: >-
+      AC-5 separation of duties is why detective tooling is delegated to the
+      security account rather than run from the management account, which holds
+      the power to change the organization it would be watching. Uses *central*
+      configuration: enablement is expressed as a configuration policy associated
+      with an OU, not as a global auto-enable toggle, so a member account that
+      drifts is corrected rather than merely reported. The legacy auto_enable
+      flags must be off under central configuration - setting them alongside
+      configuration_type = "CENTRAL" is rejected by the API at apply time.
+
+  - id: DET-006
+    title: "AWS Config recorder and delivery channel recording all supported types"
+    module: detective
+    enforcement: detective
+    frameworks:
+      fedramp: [CM-8, CM-3, CM-6, CA-7]
+      nist_800_53_r5: [CM-8, CM-3, CM-6]
+      cis: ["3.5"]
+    implementation:
+      - detective:aws_config_configuration_recorder.this
+      - detective:aws_config_delivery_channel.this
+      - detective:aws_config_configuration_recorder_status.this
+    demo_safe: true
+    billable: true
+    notes: >-
+      Config is the only service producing a timestamped, queryable record of
+      what existed and how it was configured at a past moment - which is what an
+      assessor means by evidence. Recording a subset of resource types is the
+      usual cost optimisation and the usual reason a CM-8 inventory claim falls
+      apart under questioning.
+
+  - id: DET-007
+    title: "Organization-wide Config aggregator"
+    module: detective
+    enforcement: detective
+    frameworks:
+      fedramp: [CM-8, CA-7, AU-6]
+      nist_800_53_r5: [CM-8, CA-7]
+      cis: []
+    implementation:
+      - detective:aws_config_configuration_aggregator.org
+      - detective:aws_iam_role.config_aggregator
+    demo_safe: false
+    billable: true
+    notes: "Makes 'every unencrypted volume in the boundary' a single query rather than N console tabs."
+
+  - id: DET-008
+    title: "Conformance packs: FedRAMP (baseline-selected), NIST 800-53 Rev 5, CIS v5.0"
+    module: detective
+    enforcement: detective
+    frameworks:
+      fedramp: [CA-7, CM-6, RA-5]
+      nist_800_53_r5: [CA-7, CM-6]
+      cis: ["3.5"]
+    implementation:
+      - detective:aws_config_organization_conformance_pack.org
+      - detective:aws_config_conformance_pack.account
+    demo_safe: true
+    billable: true
+    notes: >-
+      IMPORTANT - these are trimmed, hand-maintained subsets of the AWS-published
+      packs (25 / 35 / 24 rules respectively), not the full templates. The full
+      FedRAMP pack is ~150 rules of CloudFormation that nobody reviews, and
+      unreviewed rules produce unreviewed findings. Every rule included was
+      chosen because a control in this matrix depends on it. If you need
+      complete published-pack coverage, replace the files in
+      terraform/modules/detective/templates/ with the AWS originals.
+
+  - id: DET-009
+    title: "GuardDuty detector with baseline-driven publishing frequency"
+    module: detective
+    enforcement: detective
+    frameworks:
+      fedramp: [SI-4, SI-4(2), RA-5, IR-4]
+      nist_800_53_r5: [SI-4, SI-4(2), RA-5]
+      cis: []
+    implementation:
+      - detective:aws_guardduty_detector.this
+    demo_safe: true
+    billable: true
+    notes: >-
+      Covers what Config cannot see: Config knows what a resource looks like,
+      GuardDuty knows what it is doing. Fifteen-minute publishing at High.
+
+  - id: DET-010
+    title: "GuardDuty S3, EKS audit, RDS login, Lambda network, runtime and malware protection"
+    module: detective
+    enforcement: detective
+    frameworks:
+      fedramp: [SI-3, SI-4, AU-2]
+      nist_800_53_r5: [SI-3, SI-4]
+      cis: []
+    implementation:
+      - detective:aws_guardduty_detector_feature.this
+    demo_safe: true
+    billable: true
+    notes: >-
+      EBS malware protection is behind its own switch because it is by far the
+      most expensive plan - it snapshots and scans volumes on a suspicious
+      finding, charged per GB scanned.
+
+  - id: DET-011
+    title: "GuardDuty organization auto-enable for existing and future accounts"
+    module: detective
+    enforcement: detective
+    frameworks:
+      fedramp: [SI-4, CM-2, AC-5]
+      nist_800_53_r5: [SI-4, CM-2]
+      cis: []
+    implementation:
+      - detective:aws_guardduty_organization_admin_account.this
+      - detective:aws_guardduty_organization_configuration.this
+      - detective:aws_guardduty_organization_configuration_feature.this
+    demo_safe: false
+    billable: true
+    notes: "auto_enable_organization_members is ALL, not NEW; NEW leaves existing accounts unmonitored."
+
+  - id: DET-012
+    title: "Inspector v2 continuous vulnerability scanning for EC2, ECR and Lambda"
+    module: detective
+    enforcement: detective
+    frameworks:
+      fedramp: [RA-5, RA-5(2), SI-2, SI-2(2)]
+      nist_800_53_r5: [RA-5, SI-2]
+      cis: []
+    implementation:
+      - detective:aws_inspector2_enabler.this
+      - detective:aws_inspector2_delegated_admin_account.this
+      - detective:aws_inspector2_organization_configuration.this
+    demo_safe: true
+    billable: true
+    notes: >-
+      Lambda code scanning is separately metered because it decompiles and
+      analyses the package rather than reading the dependency manifest.
+
+  # =======================================================================
+  # NET - Network posture
+  # =======================================================================
+  - id: NET-001
+    title: "Default security group stripped of all rules"
+    module: network
+    enforcement: preventive
+    frameworks:
+      fedramp: [SC-7, CM-7, AC-4]
+      nist_800_53_r5: [SC-7, CM-7]
+      cis: ["5.4"]
+    implementation:
+      - network:aws_default_security_group.baseline
+    demo_safe: true
+    billable: false
+    notes: >-
+      AWS creates a default SG allowing all traffic between its members and it
+      cannot be deleted, so the only remedy is to adopt it in state and empty
+      it. An unmanaged default SG is the most common reason a "locked down" VPC
+      turns out to be flat internally.
+
+  - id: NET-002
+    title: "Default network ACL constrained to the VPC CIDR"
+    module: network
+    enforcement: preventive
+    frameworks:
+      fedramp: [SC-7, AC-4]
+      nist_800_53_r5: [SC-7, AC-4]
+      cis: []
+    implementation:
+      - network:aws_default_network_acl.baseline
+    demo_safe: true
+    billable: false
+    notes: >-
+      NACLs are stateless, so denying return traffic here breaks everything in a
+      way that is hard to diagnose. Deliberately left permissive within the CIDR
+      rather than made maximally strict.
+
+  - id: NET-003
+    title: "Private-only VPC with no internet gateway and no public IP assignment"
+    module: network
+    enforcement: preventive
+    frameworks:
+      fedramp: [SC-7, SC-7(3), AC-4]
+      nist_800_53_r5: [SC-7, SC-7(3)]
+      cis: []
+    implementation:
+      - network:aws_vpc.baseline
+      - network:aws_subnet.private
+      - network:aws_route_table.private
+      - network:aws_route_table_association.private
+    demo_safe: true
+    billable: false
+    notes: >-
+      Not "an internet gateway with a restrictive route table" - no gateway at
+      all. Egress that does not exist cannot be misconfigured. AZ count floors
+      at 2 (Moderate) or 3 (High).
+
+  - id: NET-004
+    title: "VPC flow logs in Parquet, delivered to the audit archive"
+    module: network
+    enforcement: detective
+    frameworks:
+      fedramp: [AU-2, AU-3, AU-12, SC-7]
+      nist_800_53_r5: [AU-2, AU-3, AU-12]
+      cis: ["3.9"]
+    implementation:
+      - network:aws_flow_log.vpc
+    demo_safe: true
+    billable: true
+    notes: >-
+      Traffic type ALL rather than REJECT: rejects alone are cheaper and make
+      lateral movement inside the VPC invisible. The custom log_format adds the
+      fields that make a flow attributable (account, VPC, subnet, instance,
+      pkt-srcaddr, traffic-path) which the default format omits. 60-second
+      aggregation at High, 600 at Moderate.
+
+  - id: NET-005
+    title: "S3 and DynamoDB gateway endpoints"
+    module: network
+    enforcement: preventive
+    frameworks:
+      fedramp: [SC-7, SC-7(4), AC-4]
+      nist_800_53_r5: [SC-7, AC-4]
+      cis: []
+    implementation:
+      - network:aws_vpc_endpoint.gateway
+    demo_safe: true
+    billable: false
+    notes: "Gateway endpoints are free. Traffic that leaves the VPC to reach S3 is both billable and un-inspectable."
+
+  - id: NET-006
+    title: "Interface endpoints for KMS, Logs, Monitoring, STS, SSM and Config"
+    module: network
+    enforcement: preventive
+    frameworks:
+      fedramp: [SC-7, SC-7(4)]
+      nist_800_53_r5: [SC-7]
+      cis: []
+    implementation:
+      - network:aws_vpc_endpoint.interface
+    demo_safe: true
+    billable: true
+    notes: >-
+      Roughly $7/month per endpoint per AZ, which is why the list is the minimum
+      the controls in this repo themselves depend on plus what Session Manager
+      needs - Session Manager being how you administer instances without
+      inbound SSH.
+
+  - id: NET-007
+    title: "Endpoint policies restricting endpoints to organization-owned resources"
+    module: network
+    enforcement: preventive
+    frameworks:
+      fedramp: [AC-4, SC-7, AC-21]
+      nist_800_53_r5: [AC-4, SC-7]
+      cis: []
+    implementation:
+      - network:data.aws_iam_policy_document.endpoint_perimeter
+    demo_safe: true
+    billable: false
+    notes: >-
+      Without an endpoint policy, an endpoint is an unrestricted route to every
+      account in AWS for that service - the "endpoint as exfiltration path"
+      problem. aws:ResourceOrgID closes it.
+
+  - id: NET-008
+    title: "Endpoint security group scoped to HTTPS from the VPC CIDR only"
+    module: network
+    enforcement: preventive
+    frameworks:
+      fedramp: [SC-7, CM-7]
+      nist_800_53_r5: [SC-7, CM-7]
+      cis: ["5.1"]
+    implementation:
+      - network:aws_security_group.endpoints
+      - network:aws_vpc_security_group_ingress_rule.endpoints_https
+      - network:aws_vpc_security_group_egress_rule.endpoints_https
+    demo_safe: true
+    billable: false
+    notes: "Egress is scoped back to the VPC CIDR rather than left open, which is the usual default."
+
+  # =======================================================================
+  # EVD - Evidence pipeline
+  # =======================================================================
+  - id: EVD-001
+    title: "Every Security Hub finding streamed out of the 90-day window"
+    module: evidence
+    enforcement: detective
+    frameworks:
+      fedramp: [CA-7, AU-7, AU-11]
+      nist_800_53_r5: [CA-7, AU-7]
+      cis: []
+    implementation:
+      - evidence:aws_cloudwatch_event_rule.securityhub_findings
+      - evidence:aws_cloudwatch_event_target.firehose
+    demo_safe: true
+    billable: true
+    notes: >-
+      Security Hub retains findings for 90 days. Continuous monitoring under an
+      ATO means monthly evidence for the life of the authorisation, so the
+      window has to be escaped. Suppressed findings are included deliberately -
+      an assessor asking "how do you know this was suppressed on purpose" needs
+      them in the record.
+
+  - id: EVD-002
+    title: "Firehose delivery to date-partitioned S3"
+    module: evidence
+    enforcement: foundational
+    frameworks:
+      fedramp: [AU-7, AU-4]
+      nist_800_53_r5: [AU-7]
+      cis: []
+    implementation:
+      - evidence:aws_kinesis_firehose_delivery_stream.findings
+      - evidence:aws_iam_role.firehose
+      - evidence:aws_iam_role_policy.firehose
+    demo_safe: true
+    billable: true
+    notes: >-
+      No Lambda transform: a transform function is one more thing to patch, and
+      Firehose's own prefix templating already produces the Hive partitions the
+      catalog needs.
+
+  - id: EVD-003
+    title: "Evidence lake bucket with Object Lock and organization perimeter"
+    module: evidence
+    enforcement: foundational
+    frameworks:
+      fedramp: [AU-9, AU-11, SC-7]
+      nist_800_53_r5: [AU-9, AU-11]
+      cis: []
+    implementation:
+      - evidence:aws_s3_bucket.evidence
+      - evidence:aws_s3_bucket_object_lock_configuration.evidence
+      - evidence:aws_s3_bucket_policy.evidence
+      - evidence:aws_s3_bucket_lifecycle_configuration.evidence
+    demo_safe: true
+    billable: true
+    notes: >-
+      Findings describe exactly where an organization is weakest, so AU-9 and
+      AC-6 apply at least as hard here as to the raw logs. Not cross-region
+      replicated even at High - it is a derived artefact rebuildable from the
+      archive, which is a conscious cost trade-off.
+
+  - id: EVD-004
+    title: "Glue catalog with partition projection instead of a crawler"
+    module: evidence
+    enforcement: foundational
+    frameworks:
+      fedramp: [AU-7, AU-6, CA-7]
+      nist_800_53_r5: [AU-7, AU-6]
+      cis: []
+    implementation:
+      - evidence:aws_glue_catalog_database.evidence
+      - evidence:aws_glue_catalog_table.findings
+    demo_safe: true
+    billable: false
+    notes: >-
+      The ASFF schema here is a deliberately shallow projection: the full schema
+      is ~200 nested fields and changes as AWS adds services. The columns
+      modelled are the ones an assessment question actually touches, and the raw
+      detail struct is retained so nothing is lost. Partition projection avoids
+      a scheduled crawler that costs money, lags reality and fails silently.
+
+  - id: EVD-005
+    title: "Athena workgroup with enforced encryption, a cost ceiling and saved auditor queries"
+    module: evidence
+    enforcement: detective
+    frameworks:
+      fedramp: [AU-7, AU-6, AC-3]
+      nist_800_53_r5: [AU-7, AU-6]
+      cis: []
+    implementation:
+      - evidence:aws_athena_workgroup.auditor
+      - evidence:aws_athena_named_query.open_critical_findings
+      - evidence:aws_athena_named_query.control_coverage_by_framework
+    demo_safe: true
+    billable: true
+    notes: >-
+      enforce_workgroup_configuration means an auditor cannot write results into
+      an unencrypted location, and bytes_scanned_cutoff_per_query stops a single
+      SELECT * against a year of data becoming a four-figure line item.
+
+  - id: EVD-006
+    title: "Dead letter queue and alarm for undeliverable findings"
+    module: evidence
+    enforcement: detective
+    frameworks:
+      fedramp: [AU-5, AU-5(1), IR-4]
+      nist_800_53_r5: [AU-5, AU-5(1)]
+      cis: []
+    implementation:
+      - evidence:aws_sqs_queue.findings_dlq
+      - evidence:aws_sqs_queue_policy.findings_dlq
+      - evidence:aws_cloudwatch_metric_alarm.findings_dlq_not_empty
+    demo_safe: true
+    billable: true
+    notes: >-
+      The audit trail of the audit trail. A non-empty DLQ means evidence was
+      lost, which is a same-day problem rather than a backlog item.
+
+  - id: EVD-007
+    title: "Read-only evidence bundle export from a live account"
+    module: root
+    enforcement: detective
+    frameworks:
+      fedramp: [CA-7, AU-7, CA-2]
+      nist_800_53_r5: [CA-7, AU-7]
+      cis: []
+    implementation:
+      - root:module.evidence
+      - root:module.detective
+    demo_safe: true
+    billable: false
+    notes: >-
+      scripts/export-evidence.sh collects Security Hub control results, Config
+      compliance, GuardDuty findings, CloudTrail delivery status, Access
+      Analyzer findings, the IAM credential report and the Organizations policy
+      set into a manifest-stamped bundle. Every call is read-only. It collects
+      technical evidence only - the administrative families are gathered
+      elsewhere and an assessor will ask for them separately.

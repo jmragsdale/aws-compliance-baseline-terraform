@@ -1,0 +1,233 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800" role="img" aria-labelledby="title desc">
+  <title id="title">aws-compliance-baseline-terraform architecture</title>
+  <desc id="desc">Three control planes - preventive (Organizations SCPs and RCPs), detective (Security Hub, Config, GuardDuty, Access Analyzer, Macie, Inspector) and logging - and the flow of audit logs and security findings into a central Object Lock archive and an Athena-queryable evidence lake.</desc>
+
+  <defs>
+    <style>
+      .f      { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+      .h1     { font-size: 25px; font-weight: 700; fill: #f2f6fa; letter-spacing: -0.2px; }
+      .sub    { font-size: 12.5px; fill: #8fa6bd; }
+      .plane  { font-size: 13px; font-weight: 700; fill: #f2f6fa; letter-spacing: 0.6px; }
+      .planeq { font-size: 11px; fill: #8fa6bd; }
+      .chip   { font-size: 11.5px; fill: #d9e7f5; }
+      .chipb  { font-size: 11.5px; font-weight: 600; fill: #ffffff; }
+      .cap    { font-size: 10.5px; fill: #7d92a8; }
+      .flow   { font-size: 10px; fill: #8aa4bd; font-style: italic; }
+      .foot   { font-size: 11px; fill: #7d92a8; }
+      .lgd    { font-size: 10.5px; fill: #8fa6bd; }
+    </style>
+
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#6d8aa6"/>
+    </marker>
+    <marker id="arrowb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#e8944a"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="800" fill="#0d151f"/>
+
+  <!-- ===================== header ===================== -->
+  <text class="f h1" x="40" y="44">aws-compliance-baseline-terraform</text>
+  <text class="f sub" x="40" y="66">FedRAMP Rev 5 · NIST SP 800-53 Rev 5 · CIS AWS Foundations Benchmark v5.0 — three control planes, one audit record</text>
+
+  <g transform="translate(905,30)">
+    <rect x="0" y="0" width="12" height="12" rx="3" fill="#3b2a1b" stroke="#e8944a"/>
+    <text class="f lgd" x="18" y="10">preventive</text>
+    <rect x="98" y="0" width="12" height="12" rx="3" fill="#182c3d" stroke="#4a90c4"/>
+    <text class="f lgd" x="116" y="10">detective</text>
+    <rect x="188" y="0" width="12" height="12" rx="3" fill="#16302a" stroke="#3f9e83"/>
+    <text class="f lgd" x="206" y="10">foundational</text>
+  </g>
+
+  <!-- ===================== 1. preventive plane ===================== -->
+  <rect x="40" y="92" width="1120" height="150" rx="10" fill="#151f2b" stroke="#e8944a" stroke-width="1.4"/>
+  <text class="f plane" x="58" y="115">1 · PREVENTIVE CONTROL PLANE</text>
+  <text class="f planeq" x="292" y="115">Organizations management account — the call never succeeds</text>
+
+  <g>
+    <rect x="57" y="126" width="206" height="34" rx="6" fill="#3b2a1b" stroke="#a4651f"/>
+    <text class="f chipb" x="160" y="147" text-anchor="middle">SCP · identity guardrails</text>
+
+    <rect x="277" y="126" width="206" height="34" rx="6" fill="#3b2a1b" stroke="#a4651f"/>
+    <text class="f chipb" x="380" y="147" text-anchor="middle">SCP · audit guardrails</text>
+
+    <rect x="497" y="126" width="206" height="34" rx="6" fill="#3b2a1b" stroke="#a4651f"/>
+    <text class="f chipb" x="600" y="147" text-anchor="middle">SCP · data guardrails</text>
+
+    <rect x="717" y="126" width="206" height="34" rx="6" fill="#3b2a1b" stroke="#a4651f"/>
+    <text class="f chipb" x="820" y="147" text-anchor="middle">SCP · region allow-list</text>
+
+    <rect x="937" y="126" width="206" height="34" rx="6" fill="#3b2a1b" stroke="#a4651f"/>
+    <text class="f chipb" x="1040" y="147" text-anchor="middle">SCP · compute / IMDSv2</text>
+  </g>
+
+  <g>
+    <rect x="57" y="170" width="320" height="34" rx="6" fill="#2b2118" stroke="#8a5a24"/>
+    <text class="f chip" x="217" y="191" text-anchor="middle">RCP · organization data perimeter</text>
+
+    <rect x="391" y="170" width="320" height="34" rx="6" fill="#2b2118" stroke="#8a5a24"/>
+    <text class="f chip" x="551" y="191" text-anchor="middle">RCP · confused deputy + TLS</text>
+
+    <rect x="725" y="170" width="418" height="34" rx="6" fill="#16302a" stroke="#3f9e83"/>
+    <text class="f chip" x="934" y="191" text-anchor="middle">account baseline · S3 BPA · EBS encryption default · password policy</text>
+  </g>
+
+  <text class="f cap" x="57" y="226">root usage · IAM user keys · stopping CloudTrail/Config/GuardDuty/Security Hub · leaving the org · unencrypted S3 PUT and EBS · public S3 · unapproved regions · IMDSv1</text>
+
+  <!-- arrow: preventive -> accounts -->
+  <line x1="600" y1="242" x2="600" y2="268" stroke="#e8944a" stroke-width="1.6" marker-end="url(#arrowb)"/>
+  <text class="f flow" x="612" y="260">attached to OU / root targets</text>
+
+  <!-- ===================== 2. member accounts ===================== -->
+  <rect x="40" y="272" width="1120" height="110" rx="10" fill="#151f2b" stroke="#3f9e83" stroke-width="1.4"/>
+  <text class="f plane" x="58" y="295">2 · MEMBER ACCOUNTS &amp; BASELINE VPC</text>
+  <text class="f planeq" x="352" y="295">what the guardrails constrain and what the logs describe</text>
+
+  <g>
+    <rect x="57" y="306" width="200" height="34" rx="6" fill="#16302a" stroke="#3f9e83"/>
+    <text class="f chip" x="157" y="327" text-anchor="middle">private subnets · no IGW</text>
+
+    <rect x="271" y="306" width="200" height="34" rx="6" fill="#16302a" stroke="#3f9e83"/>
+    <text class="f chip" x="371" y="327" text-anchor="middle">default SG stripped</text>
+
+    <rect x="485" y="306" width="200" height="34" rx="6" fill="#16302a" stroke="#3f9e83"/>
+    <text class="f chip" x="585" y="327" text-anchor="middle">gateway + interface VPCEs</text>
+
+    <rect x="699" y="306" width="200" height="34" rx="6" fill="#16302a" stroke="#3f9e83"/>
+    <text class="f chip" x="799" y="327" text-anchor="middle">KMS CMKs · 3 data domains</text>
+
+    <rect x="913" y="306" width="230" height="34" rx="6" fill="#16302a" stroke="#3f9e83"/>
+    <text class="f chip" x="1028" y="327" text-anchor="middle">VPC flow logs → archive</text>
+  </g>
+
+  <text class="f cap" x="57" y="366">endpoint policies carry the same aws:ResourceOrgID perimeter as the RCPs, so an endpoint is not an exfiltration path</text>
+
+  <!-- arrows: accounts -> detective -->
+  <line x1="330" y1="382" x2="330" y2="408" stroke="#6d8aa6" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <text class="f flow" x="342" y="400">configuration items</text>
+
+  <line x1="880" y1="382" x2="880" y2="408" stroke="#6d8aa6" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <text class="f flow" x="892" y="400">API + network + runtime telemetry</text>
+
+  <!-- ===================== 3. detective plane ===================== -->
+  <rect x="40" y="412" width="1120" height="120" rx="10" fill="#151f2b" stroke="#4a90c4" stroke-width="1.4"/>
+  <text class="f plane" x="58" y="435">3 · DETECTIVE CONTROL PLANE</text>
+  <text class="f planeq" x="272" y="435">delegated security tooling account (AC-5) — org auto-enable for accounts that join later</text>
+
+  <g>
+    <rect x="57" y="446" width="205" height="40" rx="6" fill="#182c3d" stroke="#4a90c4"/>
+    <text class="f chipb" x="159" y="463" text-anchor="middle">Security Hub</text>
+    <text class="f cap" x="159" y="478" text-anchor="middle">CIS v5.0 · NIST 800-53 r5 · FSBP</text>
+
+    <rect x="276" y="446" width="205" height="40" rx="6" fill="#182c3d" stroke="#4a90c4"/>
+    <text class="f chipb" x="378" y="463" text-anchor="middle">AWS Config</text>
+    <text class="f cap" x="378" y="478" text-anchor="middle">org recorder · aggregator · packs</text>
+
+    <rect x="495" y="446" width="205" height="40" rx="6" fill="#182c3d" stroke="#4a90c4"/>
+    <text class="f chipb" x="597" y="463" text-anchor="middle">GuardDuty</text>
+    <text class="f cap" x="597" y="478" text-anchor="middle">S3 · EKS · RDS · Lambda · malware</text>
+
+    <rect x="714" y="446" width="205" height="40" rx="6" fill="#182c3d" stroke="#4a90c4"/>
+    <text class="f chipb" x="816" y="463" text-anchor="middle">Access Analyzer</text>
+    <text class="f cap" x="816" y="478" text-anchor="middle">external + unused access</text>
+
+    <rect x="933" y="446" width="210" height="40" rx="6" fill="#182c3d" stroke="#4a90c4"/>
+    <text class="f chipb" x="1038" y="463" text-anchor="middle">Macie · Inspector</text>
+    <text class="f cap" x="1038" y="478" text-anchor="middle">optional · metered per GB / resource</text>
+  </g>
+
+  <text class="f cap" x="57" y="512">Config records what exists; GuardDuty records what it does. Security Hub normalises both into ASFF so one pipeline can carry everything.</text>
+
+  <!-- arrows down to logging + evidence -->
+  <line x1="330" y1="532" x2="330" y2="556" stroke="#6d8aa6" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <line x1="880" y1="532" x2="880" y2="556" stroke="#6d8aa6" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <text class="f flow" x="892" y="550">every finding, including suppressed</text>
+
+  <!-- ===================== 4. logging + evidence ===================== -->
+  <rect x="40" y="556" width="1120" height="204" rx="10" fill="#151f2b" stroke="#3f9e83" stroke-width="1.4"/>
+  <text class="f plane" x="58" y="579">4 · AUDIT RECORD &amp; EVIDENCE PLANE</text>
+  <text class="f planeq" x="330" y="579">log archive account — one Object Lock window covers every kind of audit record</text>
+
+  <!-- left: log pipeline -->
+  <rect x="56" y="590" width="536" height="156" rx="8" fill="#101b25" stroke="#26384a"/>
+  <text class="f cap" x="70" y="606">audit log pipeline</text>
+
+  <g>
+    <rect x="70" y="614" width="150" height="32" rx="5" fill="#16302a" stroke="#3f9e83"/>
+    <text class="f chip" x="145" y="634" text-anchor="middle">org CloudTrail</text>
+    <line x1="222" y1="630" x2="242" y2="630" stroke="#6d8aa6" stroke-width="1.3" marker-end="url(#arrow)"/>
+
+    <rect x="246" y="614" width="112" height="32" rx="5" fill="#16302a" stroke="#3f9e83"/>
+    <text class="f chip" x="302" y="634" text-anchor="middle">KMS CMK</text>
+    <line x1="360" y1="630" x2="380" y2="630" stroke="#6d8aa6" stroke-width="1.3" marker-end="url(#arrow)"/>
+
+    <rect x="384" y="614" width="192" height="32" rx="5" fill="#16302a" stroke="#3f9e83"/>
+    <text class="f chip" x="480" y="634" text-anchor="middle">S3 archive · Object Lock</text>
+  </g>
+
+  <g>
+    <rect x="70" y="656" width="150" height="32" rx="5" fill="#101b25" stroke="#2f4a63"/>
+    <text class="f chip" x="145" y="676" text-anchor="middle">CloudWatch Logs</text>
+    <line x1="222" y1="672" x2="242" y2="672" stroke="#6d8aa6" stroke-width="1.3" marker-end="url(#arrow)"/>
+
+    <rect x="246" y="656" width="150" height="32" rx="5" fill="#101b25" stroke="#2f4a63"/>
+    <text class="f chip" x="321" y="676" text-anchor="middle">15 CIS filters</text>
+    <line x1="398" y1="672" x2="418" y2="672" stroke="#6d8aa6" stroke-width="1.3" marker-end="url(#arrow)"/>
+
+    <rect x="422" y="656" width="154" height="32" rx="5" fill="#101b25" stroke="#2f4a63"/>
+    <text class="f chip" x="499" y="676" text-anchor="middle">alarms → SNS</text>
+  </g>
+
+  <g>
+    <rect x="70" y="698" width="150" height="32" rx="5" fill="#101b25" stroke="#2f4a63"/>
+    <text class="f chip" x="145" y="718" text-anchor="middle">VPC flow logs</text>
+    <line x1="222" y1="714" x2="242" y2="714" stroke="#6d8aa6" stroke-width="1.3" marker-end="url(#arrow)"/>
+
+    <rect x="246" y="698" width="150" height="32" rx="5" fill="#101b25" stroke="#2f4a63"/>
+    <text class="f chip" x="321" y="718" text-anchor="middle">Config snapshots</text>
+    <line x1="398" y1="714" x2="418" y2="714" stroke="#6d8aa6" stroke-width="1.3" marker-end="url(#arrow)"/>
+
+    <rect x="422" y="698" width="154" height="32" rx="5" fill="#16302a" stroke="#3f9e83"/>
+    <text class="f chip" x="499" y="718" text-anchor="middle">CRR replica (High)</text>
+  </g>
+
+  <!-- right: evidence pipeline -->
+  <rect x="608" y="590" width="536" height="156" rx="8" fill="#101b25" stroke="#26384a"/>
+  <text class="f cap" x="622" y="606">evidence pipeline — escapes the 90-day Security Hub window</text>
+
+  <g>
+    <rect x="622" y="614" width="168" height="32" rx="5" fill="#182c3d" stroke="#4a90c4"/>
+    <text class="f chip" x="706" y="634" text-anchor="middle">Security Hub findings</text>
+    <line x1="792" y1="630" x2="812" y2="630" stroke="#6d8aa6" stroke-width="1.3" marker-end="url(#arrow)"/>
+
+    <rect x="816" y="614" width="126" height="32" rx="5" fill="#182c3d" stroke="#4a90c4"/>
+    <text class="f chip" x="879" y="634" text-anchor="middle">EventBridge</text>
+    <line x1="944" y1="630" x2="964" y2="630" stroke="#6d8aa6" stroke-width="1.3" marker-end="url(#arrow)"/>
+
+    <rect x="968" y="614" width="162" height="32" rx="5" fill="#182c3d" stroke="#4a90c4"/>
+    <text class="f chip" x="1049" y="634" text-anchor="middle">Firehose (+ DLQ)</text>
+  </g>
+
+  <g>
+    <rect x="622" y="656" width="300" height="32" rx="5" fill="#16302a" stroke="#3f9e83"/>
+    <text class="f chip" x="772" y="676" text-anchor="middle">S3 evidence lake · year/month/day · Object Lock</text>
+    <line x1="924" y1="672" x2="944" y2="672" stroke="#6d8aa6" stroke-width="1.3" marker-end="url(#arrow)"/>
+
+    <rect x="948" y="656" width="182" height="32" rx="5" fill="#101b25" stroke="#2f4a63"/>
+    <text class="f chip" x="1039" y="676" text-anchor="middle">Glue · partition projection</text>
+  </g>
+
+  <g>
+    <rect x="622" y="698" width="250" height="32" rx="5" fill="#101b25" stroke="#2f4a63"/>
+    <text class="f chip" x="747" y="718" text-anchor="middle">Athena workgroup (auditor)</text>
+    <line x1="874" y1="714" x2="894" y2="714" stroke="#6d8aa6" stroke-width="1.3" marker-end="url(#arrow)"/>
+
+    <rect x="898" y="698" width="232" height="32" rx="5" fill="#101b25" stroke="#2f4a63"/>
+    <text class="f chip" x="1014" y="718" text-anchor="middle">export-evidence.sh → bundle</text>
+  </g>
+
+  <!-- ===================== footer ===================== -->
+  <text class="f foot" x="40" y="782">Plan-verified only — never applied against a real AWS Organization. FedRAMP is an authorisation process, not a Terraform module. See README "What is and is not verified".</text>
+  <text class="f foot" x="1160" y="782" text-anchor="end">77 controls · controls/controls.yaml</text>
+</svg>
