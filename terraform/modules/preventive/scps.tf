@@ -31,7 +31,7 @@ locals {
   # any path or session name still matches.
   break_glass_arns = [
     for name in var.break_glass_role_names :
-    "arn:${local.partition}:iam::*:role/${name}"
+    "arn:${local.partition}:iam::${var.break_glass_account_id}:role/${name}"
   ]
 
   # ------------------------------------------------------------------ identity

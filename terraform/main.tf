@@ -127,6 +127,8 @@ module "preventive" {
   target_ou_ids   = var.target_ou_ids
   allowed_regions = var.allowed_regions
 
+  break_glass_account_id = var.management_account_id
+
   require_kms_for_s3_put = local.bl.require_kms_for_s3_put
   log_archive_bucket_arn = local.log_archive_bucket_arn
 

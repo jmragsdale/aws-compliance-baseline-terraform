@@ -41,6 +41,21 @@ variable "log_archive_bucket_arn" {
   default     = null
 }
 
+variable "break_glass_account_id" {
+  description = <<-EOT
+    Account that owns the break-glass roles. The deny guardrails exempt these
+    roles ONLY in this account -- a wildcard account in the exemption ARN would
+    let a role of the same name in any member account bypass every SCP in the
+    organization, which is the opposite of a guardrail. AC-6(9), AC-2(7).
+  EOT
+  type        = string
+
+  validation {
+    condition     = can(regex("^[0-9]{12}$", var.break_glass_account_id))
+    error_message = "break_glass_account_id must be a 12-digit AWS account ID."
+  }
+}
+
 variable "break_glass_role_names" {
   description = <<-EOT
     IAM role names exempted from the deny guardrails so the organization can

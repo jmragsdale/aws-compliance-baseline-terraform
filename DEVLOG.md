@@ -115,3 +115,38 @@ cost, and the two examples show the intended production combinations. The two
 `check` blocks in the root module catch the corresponding failure mode - claiming
 `fedramp_baseline = "high"` while the detective layer is switched off, which
 reads fine in a tfvars file and badly in an SSP.
+
+## 2026-08-13 - First CI run against real providers
+
+Pushing one repo before the other two paid for itself immediately.
+
+**`terraform validate` passed** against the real AWS provider on the first try -
+root module and both examples. The sandbox this was authored in had the provider
+registry blocked, so this was the first genuine schema check.
+
+Three things it did catch:
+
+**1. A real security bug, surfaced by a lint warning.** tflint flagged
+`management_account_id` as declared-but-unused. The variable was not dead weight -
+it was *missing* from where it belonged. `local.break_glass_arns` was building
+`arn:aws:iam::*:role/OrganizationBreakGlass` with a wildcard account, so a role
+of that name in *any* member account would have been exempted from every deny
+SCP in the organization. That is not a guardrail with an escape hatch, it is a
+guardrail with a hole. The exemption is now scoped to
+`var.break_glass_account_id`. Worth noting how it was found: an unused-variable
+warning is normally cosmetic, and the reflex fix - delete the variable - would
+have locked the bug in permanently.
+
+**2. `aquasecurity/trivy-action@0.28.0` does not exist.** Version invented from
+memory of the tag convention. Real latest is `v0.36.0`. Actions pinned to
+nonexistent tags fail the entire job before any step runs, which is also why the
+Checkov and Conftest steps never executed on the first run.
+
+**3. gitleaks-action fails on an initial push.** It scans
+`<first-commit>^..HEAD`, and the first commit has no parent, so it exits 1 while
+simultaneously logging "no leaks found in partial scan". It also ignores
+`.gitleaks.toml` unless `GITLEAKS_CONFIG` is exported. Replaced with the gitleaks
+binary run directly over both the working tree (`gitleaks dir`) and full history
+(`gitleaks git`), using this repo's own allowlist. Simpler and strictly stricter.
+
+Fixes 2 and 3 were applied to all three cloud repos before any of them shipped.

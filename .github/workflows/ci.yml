@@ -84,7 +84,7 @@ jobs:
           category: checkov
 
       - name: Trivy config scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: config
           scan-ref: .
@@ -123,6 +123,18 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # The binary is run directly rather than via gitleaks-action, for two
+      # reasons the action's defaults get wrong: it scans a commit range that
+      # does not exist on an initial push (<first-commit>^..HEAD), and it
+      # ignores this repo's .gitleaks.toml unless GITLEAKS_CONFIG is exported.
+      # A full working-tree scan plus a full history scan, both using the
+      # repo's own allowlist, is simpler and strictly more thorough.
+      - name: gitleaks
+        run: |
+          set -euo pipefail
+          VERSION=8.24.3
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" \
+            | tar xz gitleaks
+          ./gitleaks dir . --config .gitleaks.toml --redact --no-banner
+          ./gitleaks git . --config .gitleaks.toml --redact --no-banner
