@@ -50,5 +50,6 @@ logs/
 dist/
 *.zip
 
-# Evidence exports (may contain account identifiers)
-evidence/
+# Exported evidence bundles (may contain account identifiers).
+# Root-anchored on purpose: terraform/modules/evidence/ is source, not output.
+/evidence/
