@@ -65,7 +65,8 @@ cd aws-compliance-baseline-terraform
 python3 controls/render.py --check
 
 # 2. Everything CI runs, locally
-./scripts/validate.sh
+./scripts/validate.sh            # --strict fails on checks whose tool is missing
+                                 # --json  emits per-check results for tooling
 
 # 3. Pick a shape
 cd examples/single-account    # one account, FedRAMP Moderate, no SCPs

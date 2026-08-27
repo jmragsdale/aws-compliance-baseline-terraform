@@ -53,3 +53,6 @@ dist/
 # Exported evidence bundles (may contain account identifiers).
 # Root-anchored on purpose: terraform/modules/evidence/ is source, not output.
 /evidence/
+
+# Fix-loop working dir (per-check logs, regenerated each run)
+.loop/
