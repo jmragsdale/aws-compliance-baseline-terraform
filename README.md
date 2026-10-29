@@ -1,8 +1,61 @@
-# aws-compliance-baseline-terraform
+<a id="aws-compliance-baseline-terraform"></a>
+<a href="examples/single-account/README.md">
+<picture>
+  <source media="(max-width: 600px)" srcset="docs/assets/readme/header-mobile.png">
+  <img src="docs/assets/readme/header.png" width="1440" alt="AWS Compliance Baseline. An AWS organization reference baseline with Terraform implementations, framework mappings, audit configuration and documented deployment limits.">
+</picture>
+</a>
+
+<p>
+  <a href="examples/single-account/README.md"><strong>Start here ↗</strong></a> &nbsp; / &nbsp;
+  <a href="terraform/main.tf">Source</a> &nbsp; / &nbsp;
+  <a href="#project-guide">Project guide</a> &nbsp; / &nbsp;
+  <a href="https://github.com/jmragsdale">Profile</a>
+</p>
+
+An AWS organization reference baseline with Terraform implementations, framework mappings, audit configuration and documented deployment limits.
+
+## Explore the project
+
+Open a card for the implementation, examples or supporting documentation.
+
+<p>
+<a href="CONTROLS.md">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/controls-dark.png">
+  <img src="docs/assets/readme/controls-light.png" width="360" alt="Inspect the control matrix. Trace framework mappings to the resources that implement them.">
+</picture>
+</a>
+<a href="examples/single-account/README.md">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/examples-dark.png">
+  <img src="docs/assets/readme/examples-light.png" width="360" alt="Explore deployment examples. Review single-account scope before the organization-wide configuration.">
+</picture>
+</a>
+<a href="terraform/main.tf">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/source-dark.png">
+  <img src="docs/assets/readme/source-light.png" width="360" alt="Read the Terraform source. Inspect module wiring and the baseline configuration switches.">
+</picture>
+</a>
+<a href="#validation-scope">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/limits-dark.png">
+  <img src="docs/assets/readme/limits-light.png" width="360" alt="Read what is verified. Separate recorded checks from unverified organization deployment.">
+</picture>
+</a>
+</p>
+
+## Project guide
 
 An AWS Organization baseline for FedRAMP Rev 5, NIST SP 800-53 Rev 5 and CIS AWS Foundations v5.0 — where every control claim is verified against the code that implements it.
 
+<details>
+<summary>Architecture diagram</summary>
+
 ![architecture](aws-compliance-baseline.svg)
+
+</details>
 
 ## 🎯 Overview
 
@@ -11,6 +64,9 @@ Most "compliance baseline" repos have a README table asserting framework coverag
 This one inverts that. `controls/controls.yaml` is the single source of truth: every control names the Terraform address that implements it, `controls/render.py` generates `CONTROLS.md` from it, and CI fails the build if any claimed address stops existing. A control cannot be claimed without code behind it, and code cannot be deleted while a control still claims it.
 
 **77 controls** across three control planes, each mapped to FedRAMP Rev 5, NIST 800-53 Rev 5 and CIS v5.0 identifiers.
+
+<details>
+<summary>Architecture flow (text)</summary>
 
 ```
                          ┌──────────────────────────────────────────────────┐
@@ -42,6 +98,8 @@ This one inverts that. `controls/controls.yaml` is the single source of truth: e
                          │                       └─► CRR replica (High only)│
                          └──────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ## ✨ Features
 
@@ -127,6 +185,8 @@ $ python3 controls/render.py --check
 OK: 77 controls, all implementation addresses resolve.
 ```
 
+<a id="validation-scope"></a>
+
 ## ⚠️ What is and is not verified
 
 Read this section before quoting any number above.
@@ -196,3 +256,10 @@ Things in here worth discussing in an interview, and why:
 ---
 
 If the falsifiable control matrix is an idea you would steal, ⭐ the repo — and if you have applied something like this against a real organization, I would genuinely like to hear which of the caveats above turned out to be the expensive one.
+
+<details>
+<summary>README visual assets</summary>
+
+[Artwork sources and regeneration notes](docs/assets/readme/README.md).
+
+</details>

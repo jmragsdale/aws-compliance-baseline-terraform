@@ -1,0 +1,77 @@
+{
+  "title": "AWS Compliance Baseline",
+  "titleFontSize": 78,
+  "mobileTitle": [
+    "AWS compliance",
+    "baseline"
+  ],
+  "eyebrow": "CLOUD GOVERNANCE",
+  "tagline": "Control mappings tied to real code.",
+  "mobileTagline": [
+    "Control mappings",
+    "tied to real code."
+  ],
+  "description": [
+    "An organization baseline with explicit control mappings.",
+    "Preventive controls, audit configuration and evidence."
+  ],
+  "mobileDescription": [
+    "Organization controls and audit configuration.",
+    "Mapped implementations and explicit limits."
+  ],
+  "footerLeft": "TERRAFORM",
+  "footerMiddle": "AWS ORGANIZATIONS",
+  "footerRight": "BASELINES / CONTROLS / EVIDENCE",
+  "diagram": [
+    "POLICY",
+    "CONTROL",
+    "EVIDENCE"
+  ],
+  "summary": "An AWS organization reference baseline with Terraform implementations, framework mappings, audit configuration and documented deployment limits.",
+  "cards": [
+    {
+      "slug": "controls",
+      "category": "CONTROL EVIDENCE",
+      "title": "Inspect the control matrix",
+      "lines": [
+        "Trace framework mappings to the",
+        "resources that implement them."
+      ],
+      "footer": "CONTROL MATRIX / GENERATED",
+      "href": "CONTROLS.md"
+    },
+    {
+      "slug": "examples",
+      "category": "EVALUATION PATH",
+      "title": "Explore deployment examples",
+      "lines": [
+        "Review single-account scope before",
+        "the organization-wide configuration."
+      ],
+      "footer": "EXAMPLES / ACCOUNT SCOPE",
+      "href": "examples/single-account/README.md"
+    },
+    {
+      "slug": "source",
+      "category": "IMPLEMENTATION",
+      "title": "Read the Terraform source",
+      "lines": [
+        "Inspect module wiring and the",
+        "baseline configuration switches."
+      ],
+      "footer": "TERRAFORM / REFERENCE CODE",
+      "href": "terraform/main.tf"
+    },
+    {
+      "slug": "limits",
+      "category": "VALIDATION SCOPE",
+      "title": "Read what is verified",
+      "lines": [
+        "Separate recorded checks from",
+        "unverified organization deployment."
+      ],
+      "footer": "CHECKS / DEPLOYMENT LIMITS",
+      "href": "#validation-scope"
+    }
+  ]
+}
