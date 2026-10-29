@@ -1,4 +1,5 @@
 <a id="aws-compliance-baseline-terraform"></a>
+
 <a href="examples/single-account/README.md">
 <picture>
   <source media="(max-width: 600px)" srcset="docs/assets/readme/header-mobile.png">
